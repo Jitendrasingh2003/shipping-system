@@ -1,0 +1,983 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import axios from 'axios';
+import { 
+  Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
+  BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat'];
+const SHIPMENT_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
+
+const CustomerDashboard = () => {
+  const { logout, user } = useAuth();
+  const socket = useSocket();
+
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'book' | 'calculator' | 'tickets' | 'invoices' | 'address' | 'alerts'
+  const [stats, setStats] = useState(null);
+  const [shipments, setShipments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Form Booking State
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientAddress, setRecipientAddress] = useState('');
+  const [originCity, setOriginCity] = useState(CITIES[0]);
+  const [destinationCity, setDestinationCity] = useState(CITIES[1]);
+  const [weight, setWeight] = useState(1.0);
+  const [length, setLength] = useState(10);
+  const [width, setWidth] = useState(10);
+  const [height, setHeight] = useState(10);
+  const [shipmentType, setShipmentType] = useState(SHIPMENT_TYPES[0]);
+  
+  // Real-time ETA estimation
+  const [etaLoading, setEtaLoading] = useState(false);
+  const [estimatedEta, setEstimatedEta] = useState(null);
+
+  // Rate Calculator State
+  const [calcOrigin, setCalcOrigin] = useState(CITIES[0]);
+  const [calcDest, setCalcDest] = useState(CITIES[1]);
+  const [calcWeight, setCalcWeight] = useState(1.0);
+  const [calcType, setCalcType] = useState(SHIPMENT_TYPES[0]);
+  const [calculatedCost, setCalculatedCost] = useState(null);
+  const [calculatedDays, setCalculatedDays] = useState(null);
+
+  // Address Book State
+  const [addresses, setAddresses] = useState([]);
+  const [addrName, setAddrName] = useState('');
+  const [addrPhone, setAddrPhone] = useState('');
+  const [addrText, setAddrText] = useState('');
+  const [addrCity, setAddrCity] = useState(CITIES[0]);
+  const [addrPin, setAddrPin] = useState('');
+
+  // Support Tickets State
+  const [tickets, setTickets] = useState([]);
+  const [ticketTitle, setTicketTitle] = useState('');
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [ticketCat, setTicketCat] = useState('General');
+  const [submittingTicket, setSubmittingTicket] = useState(false);
+
+  // In-app Notifications
+  const [notifications, setNotifications] = useState([]);
+
+  // Tracking details state
+  const [trackedShipment, setTrackedShipment] = useState(null);
+  const [trackingLogs, setTrackingLogs] = useState([]);
+
+  // Payment State
+  const [payingShipment, setPayingShipment] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const statsRes = await axios.get('/dashboard/stats');
+      if (statsRes.data.success) {
+        setStats(statsRes.data.stats);
+      }
+
+      const shipmentsRes = await axios.get('/shipments/customer');
+      if (shipmentsRes.data.success) {
+        setShipments(shipmentsRes.data.shipments);
+      }
+
+      const invoicesRes = await axios.get('/payments/invoices');
+      if (invoicesRes.data.success) {
+        setInvoices(invoicesRes.data.invoices);
+      }
+
+      const addressRes = await axios.get('/auth/addresses');
+      if (addressRes.data.success) {
+        setAddresses(addressRes.data.addresses);
+      }
+
+      const ticketRes = await axios.get('/shipments/tickets');
+      if (ticketRes.data.success) {
+        setTickets(ticketRes.data.tickets);
+      }
+
+      const notifRes = await axios.get('/notifications');
+      if (notifRes.data.success) {
+        setNotifications(notifRes.data.notifications);
+      }
+    } catch (err) {
+      toast.error('Failed to load portal data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Update Live ETA prediction on form changes
+  const checkLiveEta = async () => {
+    if (!originCity || !destinationCity || originCity === destinationCity) {
+      return setEstimatedEta(null);
+    }
+    
+    setEtaLoading(true);
+    try {
+      const res = await axios.post('/shipments/predict-eta', {
+        origin: originCity,
+        destination: destinationCity,
+        weight: parseFloat(weight),
+        shipmentType
+      });
+      if (res.data.success) {
+        setEstimatedEta(res.data.predicted_delivery_days);
+      }
+    } catch (err) {
+      const dist = Math.abs(originCity.length - destinationCity.length) + 3;
+      let base = dist * 0.8;
+      if (shipmentType === 'Air') base *= 0.3;
+      else if (shipmentType === 'Express') base *= 0.6;
+      else if (shipmentType === 'Ocean') base *= 1.8;
+      setEstimatedEta(Math.round((base + weight * 0.005 + 0.5) * 10) / 10);
+    } finally {
+      setEtaLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkLiveEta();
+  }, [originCity, destinationCity, weight, shipmentType]);
+
+  // Rate Calculator Logic
+  const handleCalculateRate = async (e) => {
+    e.preventDefault();
+    if (calcOrigin === calcDest) {
+      return toast.error('Origin and Destination cities must be different.');
+    }
+
+    // Cost formula
+    let basePrice = 120.00;
+    let perKgRate = 45.00;
+    if (calcType === 'Express') { basePrice = 250.00; perKgRate = 80.00; }
+    else if (calcType === 'Air') { basePrice = 500.00; perKgRate = 150.00; }
+    else if (calcType === 'Ocean') { basePrice = 300.00; perKgRate = 35.00; }
+    
+    const cost = basePrice + (calcWeight * perKgRate);
+    setCalculatedCost(Math.round(cost * 100) / 100);
+
+    // Call ML prediction endpoint for calculator
+    try {
+      const res = await axios.post('/shipments/predict-eta', {
+        origin: calcOrigin,
+        destination: calcDest,
+        weight: calcWeight,
+        shipmentType: calcType
+      });
+      if (res.data.success) {
+        setCalculatedDays(res.data.predicted_delivery_days);
+      }
+    } catch (err) {
+      const dist = Math.abs(calcOrigin.length - calcDest.length) + 3;
+      let base = dist * 0.8;
+      if (calcType === 'Air') base *= 0.3;
+      else if (calcType === 'Express') base *= 0.6;
+      else if (calcType === 'Ocean') base *= 1.8;
+      setCalculatedDays(Math.round((base + calcWeight * 0.005 + 0.5) * 10) / 10);
+    }
+  };
+
+  // Submit Support Ticket
+  const handleSubmitTicket = async (e) => {
+    e.preventDefault();
+    if (!ticketTitle || !ticketMessage) return;
+
+    setSubmittingTicket(true);
+    try {
+      const res = await axios.post('/shipments/tickets', {
+        title: ticketTitle,
+        message: ticketMessage,
+        category: ticketCat
+      });
+      if (res.data.success) {
+        toast.success('Support ticket created successfully.');
+        setTicketTitle('');
+        setTicketMessage('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to submit ticket.');
+    } finally {
+      setSubmittingTicket(false);
+    }
+  };
+
+  // Create Address Card
+  const handleCreateAddress = async (e) => {
+    e.preventDefault();
+    if (!addrName || !addrPhone || !addrText || !addrPin) return;
+
+    try {
+      const res = await axios.post('/auth/addresses', {
+        name: addrName,
+        phone: addrPhone,
+        address: addrText,
+        city: addrCity,
+        pincode: addrPin
+      });
+      if (res.data.success) {
+        toast.success('Address saved.');
+        setAddrName('');
+        setAddrPhone('');
+        setAddrText('');
+        setAddrPin('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to save address.');
+    }
+  };
+
+  // Delete Address
+  const handleDeleteAddress = async (id) => {
+    try {
+      const res = await axios.delete(`/auth/addresses/${id}`);
+      if (res.data.success) {
+        toast.success('Address deleted.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to delete address.');
+    }
+  };
+
+  // Socket Tracking listener
+  useEffect(() => {
+    if (!socket || !trackedShipment) return;
+
+    socket.emit('join:shipment', trackedShipment.trackingId);
+
+    socket.on('status-update', (data) => {
+      if (data.trackingId === trackedShipment.trackingId) {
+        toast.success(`Package status updated to: ${data.status}`);
+        setTrackingLogs(prev => [
+          { status: data.status, location: data.location, timestamp: data.timestamp },
+          ...prev
+        ]);
+        
+        setTrackedShipment(prev => ({ ...prev, status: data.status }));
+        
+        axios.get('/shipments/customer').then(res => {
+          if (res.data.success) setShipments(res.data.shipments);
+        });
+      }
+    });
+
+    return () => {
+      socket.off('status-update');
+    };
+  }, [socket, trackedShipment]);
+
+  const handleTrack = (shipment) => {
+    setTrackedShipment(shipment);
+    const sortedLogs = [...shipment.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    setTrackingLogs(sortedLogs);
+  };
+
+  const handleBook = async (e) => {
+    e.preventDefault();
+    if (originCity === destinationCity) {
+      return toast.error('Origin and Destination cities must be different.');
+    }
+
+    try {
+      const res = await axios.post('/shipments/book', {
+        recipientName,
+        recipientAddress,
+        originCity,
+        destinationCity,
+        weight,
+        length,
+        width,
+        height,
+        shipmentType
+      });
+
+      if (res.data.success) {
+        toast.success('Shipment draft saved. Redirecting to checkout...');
+        setRecipientName('');
+        setRecipientAddress('');
+        setWeight(1.0);
+        
+        setPayingShipment(res.data.shipment);
+        setActiveTab('orders');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Booking failed. Please try again.');
+    }
+  };
+
+  const handlePayment = async (shipment) => {
+    setPaymentLoading(true);
+    try {
+      const orderRes = await axios.post('/payments/order', { shipmentId: shipment._id });
+      const { order, keyId, amount, isMock } = orderRes.data;
+
+      if (isMock) {
+        toast.loading('Simulating Payment Verification...', { id: 'verify' });
+        setTimeout(async () => {
+          try {
+            const verifyRes = await axios.post('/payments/verify', {
+              shipmentId: shipment._id,
+              razorpay_order_id: order.id,
+              isMock: true
+            });
+            if (verifyRes.data.success) {
+              toast.success('Mock Payment Successful!', { id: 'verify' });
+              setPayingShipment(null);
+              fetchData();
+            }
+          } catch (e) {
+            toast.error('Verification failed.', { id: 'verify' });
+          }
+        }, 1500);
+        return;
+      }
+
+      const loadScript = () => new Promise(res => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => res(true);
+        script.onerror = () => res(false);
+        document.body.appendChild(script);
+      });
+
+      const loaded = await loadScript();
+      if (!loaded) {
+        setPaymentLoading(false);
+        return toast.error('Razorpay SDK failed to load.');
+      }
+
+      const options = {
+        key: keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'SmartShip Logistics',
+        description: `Shipment cost for ${shipment.trackingId}`,
+        order_id: order.id,
+        handler: async (response) => {
+          toast.loading('Verifying Payment Signature...', { id: 'verify' });
+          try {
+            const verifyRes = await axios.post('/payments/verify', {
+              shipmentId: shipment._id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              isMock: false
+            });
+            if (verifyRes.data.success) {
+              toast.success('Payment Received! Shipment Booked.', { id: 'verify' });
+              setPayingShipment(null);
+              fetchData();
+            }
+          } catch (err) {
+            toast.error('Verification signature validation failed.', { id: 'verify' });
+          }
+        },
+        prefill: {
+          name: user.name,
+          email: user.email
+        },
+        theme: { color: '#4f46e5' }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      toast.error('Payment checkout initiation failed.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (invoiceNumber) => {
+    try {
+      toast.loading('Downloading invoice...', { id: 'download' });
+      const response = await axios.get(`/payments/invoice/${invoiceNumber}/download`, {
+        responseType: 'blob'
+      });
+      const file = new Blob([response.data], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = fileURL;
+      link.download = `Invoice-${invoiceNumber}.pdf`;
+      link.click();
+      toast.success('Download complete!', { id: 'download' });
+    } catch (err) {
+      toast.error('Failed to download PDF.', { id: 'download' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative">
+      
+      {/* Sidebar Nav */}
+      <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
+        <div className="space-y-6">
+          
+          {/* Logo */}
+          <div className="flex items-center space-x-3 px-2 py-3 border-b border-slate-100">
+            <div className="bg-indigo-600 p-2 text-white rounded-xl">
+              <Package size={20} />
+            </div>
+            <div>
+              <span className="font-extrabold text-slate-800 text-lg leading-none">SmartShip</span>
+              <span className="text-[10px] text-slate-400 block font-bold tracking-widest uppercase">Customer portal</span>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            {[
+              { id: 'orders', label: 'My Consignments', icon: Compass },
+              { id: 'book', label: 'Book New Shipment', icon: PlusCircle },
+              { id: 'calculator', label: 'Rate Calculator', icon: Calculator },
+              { id: 'tickets', label: 'Support Tickets', icon: HelpCircle },
+              { id: 'invoices', label: 'Billing Invoices', icon: FileText },
+              { id: 'address', label: 'Saved Addresses', icon: BookOpen },
+              { id: 'alerts', label: 'Notification Feed', icon: Bell }
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => { setActiveTab(tab.id); setTrackedShipment(null); }}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 ${
+                    isActive 
+                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-100/50' 
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
+                  }`}
+                >
+                  <Icon size={18} className={isActive ? 'text-indigo-600' : 'text-slate-400'} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Footer info & Logout */}
+        <div className="pt-6 border-t border-slate-100 space-y-4">
+          <div className="flex items-center space-x-3 px-2">
+            <div className="bg-purple-100 text-purple-600 p-2.5 rounded-full font-bold text-xs uppercase">
+              {user?.name?.slice(0, 2)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">{user?.name}</p>
+              <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold transition duration-150"
+          >
+            <LogOut size={16} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Panel Content */}
+      <main className="flex-1 p-6 md:p-10 max-h-screen overflow-y-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <div className={`col-span-12 ${trackedShipment ? 'lg:col-span-7' : ''} space-y-6`}>
+            
+            {/* TAB 1: ORDERS */}
+            {activeTab === 'orders' && (
+              <div className="space-y-6 animate-fade-in">
+                {payingShipment && (
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center space-x-3 text-amber-700">
+                      <Clock size={20} />
+                      <div>
+                        <p className="font-bold text-xs">Unpaid Shipment Awaiting Checkout</p>
+                        <p className="text-[10px] text-slate-500">Order {payingShipment.trackingId} needs payment confirmation.</p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button onClick={() => setPayingShipment(null)} className="px-3 py-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold">Dismiss</button>
+                      <button onClick={() => handlePayment(payingShipment)} className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs shadow-sm flex items-center space-x-1">
+                        <CreditCard size={12} />
+                        <span>Pay Cost</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                      <Package size={22} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Booked Orders</p>
+                      <h3 className="text-2xl font-black text-slate-800 mt-0.5">{stats?.totalBooked || 0}</h3>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
+                    <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                      <Navigation size={22} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In Transit</p>
+                      <h3 className="text-2xl font-black text-slate-800 mt-0.5">{stats?.activeShipments || 0}</h3>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
+                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                      <CreditCard size={22} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Spent</p>
+                      <h3 className="text-2xl font-black text-slate-800 mt-0.5">₹{stats?.totalSpent?.toLocaleString('en-IN') || '0.00'}</h3>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Consignments List */}
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-4">My Consignments Registry</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                          <th className="pb-3">Tracking ID</th>
+                          <th className="pb-3">Route</th>
+                          <th className="pb-3">AI predicted Days</th>
+                          <th className="pb-3">Service</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {shipments.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-6 text-center text-slate-400 italic">No shipment records found.</td>
+                          </tr>
+                        ) : (
+                          shipments.map((shipment) => (
+                            <tr key={shipment._id} className="hover:bg-slate-50/30 transition">
+                              <td className="py-3.5 font-bold text-slate-800">{shipment.trackingId}</td>
+                              <td className="py-3.5">{shipment.originCity} → {shipment.destinationCity}</td>
+                              <td className="py-3.5 font-semibold text-indigo-600">{shipment.predictedDeliveryDays ? `${shipment.predictedDeliveryDays} days` : 'N/A'}</td>
+                              <td className="py-3.5">
+                                <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
+                                  {shipment.shipmentType}
+                                </span>
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  shipment.status === 'Delivered' ? 'bg-emerald-100 text-emerald-700' :
+                                  shipment.status === 'Pending Payment' ? 'bg-slate-100 text-slate-400' :
+                                  'bg-indigo-100 text-indigo-700 animate-pulse'
+                                }`}>
+                                  {shipment.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-right space-x-2">
+                                {shipment.status === 'Pending Payment' ? (
+                                  <button onClick={() => handlePayment(shipment)} className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold transition">Pay & Book</button>
+                                ) : (
+                                  <button onClick={() => handleTrack(shipment)} className="px-3.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold transition">Track Logs</button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: BOOK SHIPMENT */}
+            {activeTab === 'book' && (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fade-in">
+                <div className="md:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Book New Delivery</h3>
+                  
+                  <form onSubmit={handleBook} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Origin</label>
+                        <select value={originCity} onChange={(e) => setOriginCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Destination</label>
+                        <select value={destinationCity} onChange={(e) => setDestinationCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Weight (kg)</label>
+                        <input type="number" step="0.1" min="0.1" value={weight} onChange={(e) => setWeight(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800" required />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Shipment Method</label>
+                        <select value={shipmentType} onChange={(e) => setShipmentType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {SHIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 grid grid-cols-3 gap-3">
+                      <input type="number" placeholder="L cm" value={length} onChange={(e) => setLength(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
+                      <input type="number" placeholder="W cm" value={width} onChange={(e) => setWidth(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
+                      <input type="number" placeholder="H cm" value={height} onChange={(e) => setHeight(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <input type="text" placeholder="Recipient Name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs" required />
+                      <textarea placeholder="Delivery Address" rows="3" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs" required></textarea>
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-indigo-glow">Confirm Details & Pay</button>
+                  </form>
+                </div>
+
+                <div className="md:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm h-fit">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
+                    <Sparkles size={14} className="text-indigo-600" />
+                    <span>AI Predicted ETA</span>
+                  </h4>
+                  {etaLoading ? (
+                    <div className="py-6 text-center text-xs text-slate-400">Predicting delivery...</div>
+                  ) : estimatedEta ? (
+                    <div className="text-center py-4 space-y-2">
+                      <span className="block text-4xl font-extrabold text-indigo-600">{estimatedEta}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Days Transit Time</span>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 text-xs italic">Awaiting origin/dest.</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: RATE CALCULATOR */}
+            {activeTab === 'calculator' && (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-fade-in">
+                <div className="md:col-span-7 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Instant Rate Estimator</h3>
+                  
+                  <form onSubmit={handleCalculateRate} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From</label>
+                        <select value={calcOrigin} onChange={(e) => setCalcOrigin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To</label>
+                        <select value={calcDest} onChange={(e) => setCalcDest(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Weight (kg)</label>
+                        <input type="number" step="0.1" value={calcWeight} onChange={(e) => setCalcWeight(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Service</label>
+                        <select value={calcType} onChange={(e) => setCalcType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {SHIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition">Calculate Estimation</button>
+                  </form>
+                </div>
+
+                <div className="md:col-span-5 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm h-fit">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-4">Pricing & Transit Quote</h4>
+                  {calculatedCost ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-xs text-slate-500 font-semibold">Estimated Cost</span>
+                        <span className="text-xs font-bold text-emerald-600">₹{calculatedCost.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-slate-500 font-semibold">AI Transit Duration</span>
+                        <span className="text-xs font-bold text-indigo-600">{calculatedDays || 'N/A'} Days</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 text-xs italic">Submit parameters to calculate.</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: SUPPORT TICKETS */}
+            {activeTab === 'tickets' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+                <div className="lg:col-span-5 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm h-fit">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Submit Support Ticket</h3>
+                  
+                  <form onSubmit={handleSubmitTicket} className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Category</label>
+                      <select value={ticketCat} onChange={(e) => setTicketCat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <option value="General">General Inquiries</option>
+                        <option value="Delay">Delivery Delay</option>
+                        <option value="Billing">Billing & Cost Errors</option>
+                        <option value="Damage package">Damage package / Claims</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Issue Title</label>
+                      <input type="text" value={ticketTitle} onChange={(e) => setTicketTitle(e.target.value)} placeholder="Brief title of issue" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Description Message</label>
+                      <textarea value={ticketMessage} onChange={(e) => setTicketMessage(e.target.value)} placeholder="Describe the issue in detail..." rows="4" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required></textarea>
+                    </div>
+
+                    <button type="submit" disabled={submittingTicket} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition">
+                      {submittingTicket ? 'Submitting...' : 'Send Ticket'}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="lg:col-span-7 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">My Support Tickets</h3>
+                  
+                  <div className="space-y-3">
+                    {tickets.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic text-center py-6">No support tickets submitted.</p>
+                    ) : (
+                      tickets.map(t => (
+                        <div key={t._id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase">{t.category}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${t.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{t.status}</span>
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-800">{t.title}</h4>
+                          <p className="text-[11px] text-slate-500">{t.message}</p>
+                          <span className="text-[9px] text-slate-400 block font-medium">Created: {new Date(t.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: BILLING INVOICES */}
+            {activeTab === 'invoices' && (
+              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in">
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Billing Ledger logs</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                        <th className="pb-3.5">Invoice Number</th>
+                        <th className="pb-3.5">Date</th>
+                        <th className="pb-3.5">Payment ID</th>
+                        <th className="pb-3.5">Amount Paid</th>
+                        <th className="pb-3.5 text-right">Invoice Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {invoices.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-6 text-center text-slate-400 italic">No billing statements available.</td>
+                        </tr>
+                      ) : (
+                        invoices.map((invoice) => (
+                          <tr key={invoice._id} className="hover:bg-slate-50/40 transition">
+                            <td className="py-3.5 font-bold text-slate-800">{invoice.invoiceNumber}</td>
+                            <td className="py-3.5 text-slate-400">{new Date(invoice.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3.5 text-slate-500 font-mono text-[10px]">{invoice.paymentId}</td>
+                            <td className="py-3.5 font-bold text-emerald-600">₹{invoice.amount.toFixed(2)}</td>
+                            <td className="py-3.5 text-right">
+                              <button
+                                onClick={() => handleDownloadInvoice(invoice.invoiceNumber)}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold transition inline-flex items-center space-x-1.5"
+                              >
+                                <span>Download PDF</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: SAVED ADDRESSES */}
+            {activeTab === 'address' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+                <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm h-fit">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Save New Address</h3>
+                  
+                  <form onSubmit={handleCreateAddress} className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Recipient Name</label>
+                      <input type="text" value={addrName} onChange={(e) => setAddrName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Contact Phone</label>
+                      <input type="tel" value={addrPhone} onChange={(e) => setAddrPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Complete Address</label>
+                      <textarea value={addrText} onChange={(e) => setAddrText(e.target.value)} rows="3" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required></textarea>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">City</label>
+                        <select value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs">
+                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pincode</label>
+                        <input type="text" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs" required />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-indigo-glow">Save Address</button>
+                  </form>
+                </div>
+
+                <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">My Saved Addresses</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {addresses.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-6 col-span-2 text-center">No saved addresses.</p>
+                    ) : (
+                      addresses.map(a => (
+                        <div key={a._id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl relative space-y-2">
+                          <button onClick={() => handleDeleteAddress(a._id)} className="absolute top-3 right-3 p-1.5 bg-white border border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition">
+                            <Trash2 size={12} />
+                          </button>
+                          <h4 className="text-xs font-bold text-slate-800 pr-6">{a.name}</h4>
+                          <p className="text-[11px] text-slate-500">{a.address}</p>
+                          <p className="text-[10px] font-semibold text-slate-700">{a.city} - {a.pincode}</p>
+                          <span className="text-[9px] text-slate-400 block font-medium">Phone: {a.phone}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 7: NOTIFICATION FEED */}
+            {activeTab === 'alerts' && (
+              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm max-w-2xl animate-fade-in">
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Notification History Logs</h3>
+                
+                <div className="divide-y divide-slate-100">
+                  {notifications.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic text-center py-6">No recent notification alerts.</p>
+                  ) : (
+                    notifications.map(n => (
+                      <div key={n._id} className="py-3.5 flex items-start space-x-3 hover:bg-slate-50/20 transition px-2 rounded-lg">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mt-0.5">
+                          <Bell size={14} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800">{n.title}</h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{n.message}</p>
+                          <span className="text-[9px] text-slate-400 block mt-1 font-semibold">{new Date(n.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Live WS timeline tracking side drawer */}
+          {trackedShipment && (
+            <div className="col-span-12 lg:col-span-5 animate-fade-in">
+              <div className="bg-white border border-cyan-500/30 p-6 rounded-3xl shadow-cyan-glow relative">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+                  <div>
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-cyan-600">WebSocket Live Tracker</h3>
+                    <p className="text-[10px] text-slate-400 font-bold">{trackedShipment.trackingId}</p>
+                  </div>
+                  <button onClick={() => setTrackedShipment(null)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">✕ Close</button>
+                </div>
+
+                <div className="space-y-6 pl-2 relative">
+                  <div className="absolute left-[13px] top-[10px] bottom-[10px] w-0.5 bg-slate-100"></div>
+
+                  {trackingLogs.map((log, index) => (
+                    <div key={index} className="flex items-start space-x-4 relative">
+                      <div className={`z-10 rounded-full p-1 border-4 ${index === 0 ? 'bg-cyan-500 border-cyan-100 shadow-cyan-glow' : 'bg-slate-100 border-slate-50'}`}>
+                        <CheckCircle size={10} className={index === 0 ? 'text-white' : 'text-slate-400'} />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className={`text-xs font-bold ${index === 0 ? 'text-cyan-600' : 'text-slate-700'}`}>{log.status}</p>
+                          <span className="text-[9px] text-slate-400 font-bold">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Location: {log.location || 'Warehouse node'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </main>
+
+    </div>
+  );
+};
+
+const Loader2 = ({ className, size }) => (
+  <svg className={`animate-spin ${className}`} style={{ width: size, height: size }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
+export default CustomerDashboard;
