@@ -95,7 +95,7 @@ const PortalSelectPage = () => {
           </h1>
           
           <p className="text-slate-500 text-sm leading-relaxed">
-            Predict precise ETAs with Random Forest regression, track shipments instantly over Socket.io, and confirm orders with seamless Razorpay checkout.
+            Calculate estimated delivery times instantly, track shipments over Socket.io, and confirm orders with seamless Razorpay checkout.
           </p>
 
           {/* Quick Demo Fill Selector */}

@@ -20,6 +20,7 @@ const shipmentRoutes = require('./routes/shipmentRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +51,59 @@ io.on('connection', (socket) => {
     console.log(`📦 Tracker client joined shipment room: shipment:${trackingId}`);
   });
 
+  // Support chat room join
+  socket.on('chat:join', (roomId) => {
+    socket.join(`chat:${roomId}`);
+    console.log(`💬 User joined chat room: chat:${roomId}`);
+  });
+
+  // Support chat message handler
+  socket.on('chat:send_message', async (data) => {
+    try {
+      const ChatMessage = require('./models/ChatMessage');
+      const chatMsg = new ChatMessage({
+        roomId: data.roomId,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderRole: data.senderRole,
+        message: data.message
+      });
+      await chatMsg.save();
+
+      // Broadcast message to everyone in the specific chat room
+      io.to(`chat:${data.roomId}`).emit('chat:message', chatMsg);
+
+      // Notify other active dashboard roles about a new message alert
+      socket.broadcast.emit('chat:new_message_alert', {
+        roomId: data.roomId,
+        senderName: data.senderName,
+        message: data.message
+      });
+
+      // ---- AI Chatbot Auto-Reply ----
+      if (data.senderRole === 'customer' && data.chatMode === 'ai') {
+        const { getAiChatResponse } = require('./utils/aiHelper');
+        const aiMessageText = await getAiChatResponse(data.message, data.roomId);
+
+        const aiMsg = new ChatMessage({
+          roomId: data.roomId,
+          senderId: 'ai-assistant',
+          senderName: 'SmartShip AI Assistant',
+          senderRole: 'staff',
+          message: aiMessageText
+        });
+        await aiMsg.save();
+
+        // Broadcast AI reply to room with a slight typing delay
+        setTimeout(() => {
+          io.to(`chat:${data.roomId}`).emit('chat:message', aiMsg);
+        }, 800);
+      }
+    } catch (err) {
+      console.error('Socket chat error:', err.message);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`🔌 Socket Disconnected: ${socket.id}`);
   });
@@ -74,6 +128,7 @@ app.use('/api/shipments', shipmentRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

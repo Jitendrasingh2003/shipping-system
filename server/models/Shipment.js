@@ -29,7 +29,7 @@ const shipmentSchema = new mongoose.Schema({
   },
   assignedStaffId: { type: String, default: null },
   assignedStaffName: { type: String, default: null },
-  predictedDeliveryDays: { type: Number, default: null },
+  estimatedDeliveryDays: { type: Number, default: null },
   paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Failed'], default: 'Pending' },
   paymentId: { type: String, default: null },
   history: [historySchema]

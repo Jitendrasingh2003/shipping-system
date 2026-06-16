@@ -2,7 +2,7 @@ const Shipment = require('../models/Shipment');
 const Notification = require('../models/Notification');
 const { v4: uuidv4 } = require('uuid');
 
-// Helper to estimate delivery days as fallback if Flask ML service is offline
+// Helper to estimate delivery days using local routing formula
 const getFallbackDeliveryTime = (origin, destination, type, weight) => {
   // Rough distance-like proxy based on length of names
   const distMultiplier = Math.abs(origin.length - destination.length) + 3;
@@ -36,33 +36,8 @@ const bookShipment = async (req, res, next) => {
     const senderName = req.user.name;
     const currentDayOfWeek = new Date().getDay(); // 0 is Sunday, 1 is Monday...
 
-    // 1. Contact Flask ML service to get ETA prediction
-    let predictedDeliveryDays = null;
-    try {
-      const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5001';
-      const response = await fetch(`${mlUrl}/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin: originCity,
-          destination: destinationCity,
-          weight: parseFloat(weight),
-          shipment_type: shipmentType,
-          day_of_week: currentDayOfWeek
-        })
-      });
-      
-      const mlData = await response.json();
-      if (mlData.success) {
-        predictedDeliveryDays = mlData.predicted_delivery_days;
-        console.log(`🤖 ML Predicted ETA: ${predictedDeliveryDays} days`);
-      } else {
-        throw new Error(mlData.message || 'ML prediction failed');
-      }
-    } catch (err) {
-      console.warn(`⚠️ ML Service Offline, using fallback formula: ${err.message}`);
-      predictedDeliveryDays = getFallbackDeliveryTime(originCity, destinationCity, shipmentType, parseFloat(weight));
-    }
+    // Calculate estimated delivery days locally using the routing formula
+    const estimatedDeliveryDays = getFallbackDeliveryTime(originCity, destinationCity, shipmentType, parseFloat(weight));
 
     // 2. Save shipment draft (Pending Payment)
     const shipment = new Shipment({
@@ -81,7 +56,7 @@ const bookShipment = async (req, res, next) => {
       },
       shipmentType,
       status: 'Pending Payment',
-      predictedDeliveryDays,
+      estimatedDeliveryDays,
       paymentStatus: 'Pending',
       history: [{
         status: 'Pending Payment',
@@ -254,40 +229,16 @@ const updateShipmentStatus = async (req, res, next) => {
   }
 };
 
-// Predict ETA without booking (For live preview in customer dashboard)
-const predictEta = async (req, res, next) => {
+// Estimate ETA without booking (For live preview in customer dashboard)
+const estimateEta = async (req, res, next) => {
   const { origin, destination, weight, shipmentType } = req.body;
-  const currentDayOfWeek = new Date().getDay();
 
   try {
-    let predictedDeliveryDays = null;
-    try {
-      const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5001';
-      const response = await fetch(`${mlUrl}/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin,
-          destination,
-          weight: parseFloat(weight) || 1.0,
-          shipment_type: shipmentType,
-          day_of_week: currentDayOfWeek
-        })
-      });
-      
-      const mlData = await response.json();
-      if (mlData.success) {
-        predictedDeliveryDays = mlData.predicted_delivery_days;
-      } else {
-        throw new Error(mlData.message || 'ML prediction failed');
-      }
-    } catch (err) {
-      predictedDeliveryDays = getFallbackDeliveryTime(origin, destination, shipmentType, parseFloat(weight) || 1.0);
-    }
+    const estimatedDeliveryDays = getFallbackDeliveryTime(origin, destination, shipmentType, parseFloat(weight) || 1.0);
 
     res.status(200).json({
       success: true,
-      predicted_delivery_days: predictedDeliveryDays
+      estimated_delivery_days: estimatedDeliveryDays
     });
   } catch (error) {
     next(error);
@@ -344,6 +295,23 @@ const resolveUserTicket = async (req, res, next) => {
   }
 };
 
+// AI route & shipping method recommendation
+const recommendRoute = async (req, res, next) => {
+  const { origin, destination, weight, urgency } = req.body;
+
+  try {
+    const { getAiRouteRecommendation } = require('../utils/aiHelper');
+    const recommendation = await getAiRouteRecommendation(origin, destination, weight, urgency || 'Standard');
+
+    res.status(200).json({
+      success: true,
+      recommendation
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   bookShipment,
   getShipmentByTrackingId,
@@ -352,8 +320,9 @@ module.exports = {
   getAllShipments,
   assignShipment,
   updateShipmentStatus,
-  predictEta,
+  estimateEta,
   getUserTickets,
   createUserTicket,
-  resolveUserTicket
+  resolveUserTicket,
+  recommendRoute
 };

@@ -22,8 +22,21 @@ export const SocketProvider = ({ children }) => {
         socketInstance.emit('join:user', user.id);
       });
 
+      // Request browser native notification permission on load
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
       // Global event listener for in-app toast alerts
       socketInstance.on('notification', (data) => {
+        // Native desktop notification fallback
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(data.title, {
+            body: data.message,
+            icon: '/vite.svg'
+          });
+        }
+
         toast.custom((t) => (
           <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-slate-900 border border-slate-800 shadow-glass-indigo rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 p-4`}>
             <div className="flex-1 w-0">
@@ -40,6 +53,16 @@ export const SocketProvider = ({ children }) => {
             </div>
           </div>
         ), { duration: 5000 });
+      });
+
+      // Support chat alert notification
+      socketInstance.on('chat:new_message_alert', (data) => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`SmartShip Support Desk`, {
+            body: `New message from ${data.senderName}: "${data.message}"`,
+            icon: '/vite.svg'
+          });
+        }
       });
 
       setSocket(socketInstance);

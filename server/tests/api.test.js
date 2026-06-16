@@ -56,9 +56,9 @@ describe('SmartShip End-to-End API Integration tests', () => {
     expect(res.body.token).toBeDefined();
   });
 
-  test('POST /api/shipments/predict-eta - Get Delivery Days Estimation', async () => {
+  test('POST /api/shipments/calculate-eta - Get Delivery Days Estimation', async () => {
     const res = await request(app)
-      .post('/api/shipments/predict-eta')
+      .post('/api/shipments/calculate-eta')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
         origin: 'Mumbai',
@@ -69,8 +69,8 @@ describe('SmartShip End-to-End API Integration tests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.predicted_delivery_days).toBeDefined();
-    expect(typeof res.body.predicted_delivery_days).toBe('number');
+    expect(res.body.estimated_delivery_days).toBeDefined();
+    expect(typeof res.body.estimated_delivery_days).toBe('number');
   });
 
   test('POST /api/shipments/book - Book Shipment (Draft Awaiting Payment)', async () => {

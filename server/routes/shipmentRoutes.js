@@ -8,10 +8,11 @@ const {
   getAllShipments,
   assignShipment,
   updateShipmentStatus,
-  predictEta,
+  estimateEta,
   getUserTickets,
   createUserTicket,
-  resolveUserTicket
+  resolveUserTicket,
+  recommendRoute
 } = require('../controllers/shipmentController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -20,7 +21,8 @@ router.get('/track/:trackingId', getShipmentByTrackingId);
 
 // Customer only routes
 router.post('/book', protect, authorize('customer'), bookShipment);
-router.post('/predict-eta', protect, authorize('customer'), predictEta);
+router.post('/calculate-eta', protect, authorize('customer'), estimateEta);
+router.post('/recommend-route', protect, authorize('customer'), recommendRoute);
 router.get('/customer', protect, authorize('customer'), getCustomerShipments);
 
 // Staff only routes

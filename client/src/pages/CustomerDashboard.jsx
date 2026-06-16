@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
-  BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle
+  BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,6 +35,11 @@ const CustomerDashboard = () => {
   // Real-time ETA estimation
   const [etaLoading, setEtaLoading] = useState(false);
   const [estimatedEta, setEstimatedEta] = useState(null);
+
+  // AI Route Recommender State
+  const [recommenderUrgency, setRecommenderUrgency] = useState('Standard');
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState(null);
 
   // Rate Calculator State
   const [calcOrigin, setCalcOrigin] = useState(CITIES[0]);
@@ -69,6 +74,22 @@ const CustomerDashboard = () => {
   // Payment State
   const [payingShipment, setPayingShipment] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Chat and Map Refs/States
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessageText, setNewMessageText] = useState('');
+  const [chatMode, setChatMode] = useState('ai');
+  const chatBottomRef = useRef(null);
+
+  // Floating AI Chatbot State
+  const [floatingChatOpen, setFloatingChatOpen] = useState(false);
+  const [floatingMessages, setFloatingMessages] = useState([
+    { text: "Hello! I am your SmartShip AI Assistant. How can I help you today?", isAi: true, time: new Date() }
+  ]);
+  const [floatingInput, setFloatingInput] = useState('');
+  const [floatingLoading, setFloatingLoading] = useState(false);
+  const floatingChatBottomRef = useRef(null);
+  const mapRef = useRef(null);
 
   const fetchData = async () => {
     try {
@@ -113,6 +134,28 @@ const CustomerDashboard = () => {
     fetchData();
   }, []);
 
+  const exportInvoicesToCSV = () => {
+    if (invoices.length === 0) return toast.error('No invoices to export.');
+    const headers = ['Invoice Number', 'Date', 'Payment ID', 'Amount Paid'];
+    const rows = invoices.map(inv => [
+      inv.invoiceNumber,
+      new Date(inv.createdAt).toLocaleDateString(),
+      inv.paymentId,
+      inv.amount
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.map(val => `"${val.toString().replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `SmartShip-Invoices-Export-${Date.now()}.csv`);
+    link.click();
+    toast.success('Invoices exported successfully!');
+  };
+
   // Update Live ETA prediction on form changes
   const checkLiveEta = async () => {
     if (!originCity || !destinationCity || originCity === destinationCity) {
@@ -121,14 +164,14 @@ const CustomerDashboard = () => {
     
     setEtaLoading(true);
     try {
-      const res = await axios.post('/shipments/predict-eta', {
+      const res = await axios.post('/shipments/calculate-eta', {
         origin: originCity,
         destination: destinationCity,
         weight: parseFloat(weight),
         shipmentType
       });
       if (res.data.success) {
-        setEstimatedEta(res.data.predicted_delivery_days);
+        setEstimatedEta(res.data.estimated_delivery_days);
       }
     } catch (err) {
       const dist = Math.abs(originCity.length - destinationCity.length) + 3;
@@ -142,9 +185,218 @@ const CustomerDashboard = () => {
     }
   };
 
+  const handleGetAiRecommendation = async () => {
+    if (originCity === destinationCity) {
+      return toast.error('Origin and Destination cities must be different.');
+    }
+
+    setRecommendationLoading(true);
+    setAiRecommendation(null);
+    try {
+      const res = await axios.post('/shipments/recommend-route', {
+        origin: originCity,
+        destination: destinationCity,
+        weight,
+        urgency: recommenderUrgency
+      });
+
+      if (res.data.success) {
+        setAiRecommendation(res.data.recommendation);
+        toast.success('AI recommendation loaded successfully!');
+      }
+    } catch (err) {
+      toast.error('Failed to load AI route recommendation.');
+    } finally {
+      setRecommendationLoading(false);
+    }
+  };
+
   useEffect(() => {
     checkLiveEta();
   }, [originCity, destinationCity, weight, shipmentType]);
+
+  // Leaflet Map Initialization and Update Loop
+  useEffect(() => {
+    if (!trackedShipment || !window.L) return;
+
+    const cityCoordinates = {
+      'Mumbai': [19.0760, 72.8777],
+      'Delhi': [28.7041, 77.1025],
+      'Bangalore': [12.9716, 77.5946],
+      'Chennai': [13.0827, 80.2707],
+      'Kolkata': [22.5726, 88.3639],
+      'Hyderabad': [17.3850, 78.4867],
+      'Pune': [18.5204, 73.8567],
+      'Ahmedabad': [23.0225, 72.5714],
+      'Jaipur': [26.9124, 75.7873],
+      'Surat': [21.1702, 72.8311]
+    };
+
+    const originCoords = cityCoordinates[trackedShipment.originCity] || [20.5937, 78.9629];
+    const destCoords = cityCoordinates[trackedShipment.destinationCity] || [20.5937, 78.9629];
+
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    // Wrap in a short timeout to ensure container is fully rendered in DOM
+    const timer = setTimeout(() => {
+      const mapEl = document.getElementById('tracking-map');
+      if (!mapEl) return;
+
+      const map = window.L.map('tracking-map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([
+        (originCoords[0] + destCoords[0]) / 2,
+        (originCoords[1] + destCoords[1]) / 2
+      ], 5);
+
+      mapRef.current = map;
+
+      window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      // Origin
+      window.L.marker(originCoords, {
+        icon: window.L.divIcon({
+          className: 'bg-indigo-600 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-[10px] border border-white shadow-md',
+          html: 'A',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        })
+      }).addTo(map).bindPopup(`<b>Origin Hub:</b> ${trackedShipment.originCity}`);
+
+      // Destination
+      window.L.marker(destCoords, {
+        icon: window.L.divIcon({
+          className: 'bg-emerald-600 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-[10px] border border-white shadow-md',
+          html: 'B',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        })
+      }).addTo(map).bindPopup(`<b>Destination Hub:</b> ${trackedShipment.destinationCity}`);
+
+      // Route
+      const routeLine = window.L.polyline([originCoords, destCoords], {
+        color: '#6366f1',
+        weight: 3,
+        dashArray: '5, 10'
+      }).addTo(map);
+
+      map.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+
+      // Live truck marker interpolation
+      const statusProgress = {
+        'Booked': 0,
+        'Picked up': 0.25,
+        'In Transit': 0.5,
+        'Out for Delivery': 0.75,
+        'Delivered': 1
+      };
+
+      const progress = statusProgress[trackedShipment.status] || 0;
+      const truckCoords = [
+        originCoords[0] + (destCoords[0] - originCoords[0]) * progress,
+        originCoords[1] + (destCoords[1] - originCoords[1]) * progress
+      ];
+
+      window.L.marker(truckCoords, {
+        icon: window.L.divIcon({
+          className: 'text-2xl flex items-center justify-center filter drop-shadow',
+          html: '🚚',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        })
+      }).addTo(map).bindPopup(`<b>Package Status:</b> ${trackedShipment.status}`);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [trackedShipment, trackingLogs]);
+
+  // Load chat history and join room
+  useEffect(() => {
+    if (!socket || activeTab !== 'chat' || !user) return;
+
+    socket.emit('chat:join', user.id);
+
+    axios.get(`/chat/history/${user.id}`).then(res => {
+      if (res.data.success) {
+        setChatMessages(res.data.messages);
+      }
+    }).catch(err => console.error('Chat history fetch failed:', err.message));
+
+    socket.on('chat:message', (msg) => {
+      setChatMessages(prev => [...prev, msg]);
+    });
+
+    return () => {
+      socket.off('chat:message');
+    };
+  }, [socket, activeTab, user]);
+
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  const handleSendChatMessage = (e) => {
+    e.preventDefault();
+    if (!newMessageText.trim() || !socket || !user) return;
+
+    socket.emit('chat:send_message', {
+      roomId: user.id,
+      senderId: user.id,
+      senderName: user.name,
+      senderRole: 'customer',
+      message: newMessageText.trim(),
+      chatMode: chatMode
+    });
+
+    setNewMessageText('');
+  };
+
+  useEffect(() => {
+    if (floatingChatBottomRef.current) {
+      floatingChatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [floatingMessages, floatingChatOpen]);
+
+  const handleSendFloatingMessage = async (e) => {
+    e.preventDefault();
+    if (!floatingInput.trim() || floatingLoading) return;
+
+    const userText = floatingInput.trim();
+    setFloatingInput('');
+    setFloatingMessages(prev => [...prev, { text: userText, isAi: false, time: new Date() }]);
+    setFloatingLoading(true);
+
+    try {
+      const res = await axios.post('/chat/ai', { message: userText });
+      if (res.data.success) {
+        setFloatingMessages(prev => [
+          ...prev,
+          { text: res.data.response, isAi: true, time: new Date() }
+        ]);
+      }
+    } catch (err) {
+      setFloatingMessages(prev => [
+        ...prev,
+        { text: "Sorry, I ran into an error trying to process your request. Please try again.", isAi: true, time: new Date() }
+      ]);
+    } finally {
+      setFloatingLoading(false);
+    }
+  };
 
   // Rate Calculator Logic
   const handleCalculateRate = async (e) => {
@@ -165,14 +417,14 @@ const CustomerDashboard = () => {
 
     // Call ML prediction endpoint for calculator
     try {
-      const res = await axios.post('/shipments/predict-eta', {
+      const res = await axios.post('/shipments/calculate-eta', {
         origin: calcOrigin,
         destination: calcDest,
         weight: calcWeight,
         shipmentType: calcType
       });
       if (res.data.success) {
-        setCalculatedDays(res.data.predicted_delivery_days);
+        setCalculatedDays(res.data.estimated_delivery_days);
       }
     } catch (err) {
       const dist = Math.abs(calcOrigin.length - calcDest.length) + 3;
@@ -448,6 +700,7 @@ const CustomerDashboard = () => {
               { id: 'orders', label: 'My Consignments', icon: Compass },
               { id: 'book', label: 'Book New Shipment', icon: PlusCircle },
               { id: 'calculator', label: 'Rate Calculator', icon: Calculator },
+              { id: 'chat', label: 'Support Desk Chat', icon: MessageSquare },
               { id: 'tickets', label: 'Support Tickets', icon: HelpCircle },
               { id: 'invoices', label: 'Billing Invoices', icon: FileText },
               { id: 'address', label: 'Saved Addresses', icon: BookOpen },
@@ -564,7 +817,7 @@ const CustomerDashboard = () => {
                         <tr className="border-b border-slate-100 text-slate-400 font-bold">
                           <th className="pb-3">Tracking ID</th>
                           <th className="pb-3">Route</th>
-                          <th className="pb-3">AI predicted Days</th>
+                          <th className="pb-3">Est. Days</th>
                           <th className="pb-3">Service</th>
                           <th className="pb-3">Status</th>
                           <th className="pb-3 text-right">Actions</th>
@@ -580,7 +833,7 @@ const CustomerDashboard = () => {
                             <tr key={shipment._id} className="hover:bg-slate-50/30 transition">
                               <td className="py-3.5 font-bold text-slate-800">{shipment.trackingId}</td>
                               <td className="py-3.5">{shipment.originCity} → {shipment.destinationCity}</td>
-                              <td className="py-3.5 font-semibold text-indigo-600">{shipment.predictedDeliveryDays ? `${shipment.predictedDeliveryDays} days` : 'N/A'}</td>
+                              <td className="py-3.5 font-semibold text-indigo-600">{shipment.estimatedDeliveryDays ? `${shipment.estimatedDeliveryDays} days` : 'N/A'}</td>
                               <td className="py-3.5">
                                 <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
                                   {shipment.shipmentType}
@@ -662,21 +915,80 @@ const CustomerDashboard = () => {
                   </form>
                 </div>
 
-                <div className="md:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm h-fit">
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
-                    <Sparkles size={14} className="text-indigo-600" />
-                    <span>AI Predicted ETA</span>
-                  </h4>
-                  {etaLoading ? (
-                    <div className="py-6 text-center text-xs text-slate-400">Predicting delivery...</div>
-                  ) : estimatedEta ? (
-                    <div className="text-center py-4 space-y-2">
-                      <span className="block text-4xl font-extrabold text-indigo-600">{estimatedEta}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Days Transit Time</span>
+                <div className="md:col-span-4 space-y-6 flex flex-col h-fit">
+                  {/* ETA Card */}
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
+                      <Sparkles size={14} className="text-indigo-600" />
+                      <span>Estimated Transit ETA</span>
+                    </h4>
+                    {etaLoading ? (
+                      <div className="py-6 text-center text-xs text-slate-400">Predicting delivery...</div>
+                    ) : estimatedEta ? (
+                      <div className="text-center py-4 space-y-2">
+                        <span className="block text-4xl font-extrabold text-indigo-600">{estimatedEta}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Days Transit Time</span>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400 text-xs italic">Awaiting origin/dest.</div>
+                    )}
+                  </div>
+
+                  {/* AI Recommender Card */}
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5 border-b border-slate-100 pb-3">
+                      <Sparkles size={14} className="text-purple-600" />
+                      <span>AI Route Recommender</span>
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Delivery Urgency</label>
+                        <select
+                          value={recommenderUrgency}
+                          onChange={(e) => setRecommenderUrgency(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-[11px] text-slate-800 focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="Standard">Standard (Economical)</option>
+                          <option value="Rush">Rush (Fast Delivery)</option>
+                          <option value="Urgent">Urgent (Immediate Flight)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleGetAiRecommendation}
+                        disabled={recommendationLoading}
+                        className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-[10px] font-bold transition shadow-sm"
+                      >
+                        {recommendationLoading ? 'Analyzing Route...' : '✨ Get AI Recommendation'}
+                      </button>
                     </div>
-                  ) : (
-                    <div className="text-center py-6 text-slate-400 text-xs italic">Awaiting origin/dest.</div>
-                  )}
+
+                    {aiRecommendation && (
+                      <div className="pt-3 border-t border-slate-100 space-y-2.5 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold text-slate-500">Recommended:</span>
+                          <span className="px-2.5 py-0.5 rounded bg-purple-50 border border-purple-100 text-purple-700 text-[10px] font-black uppercase">
+                            {aiRecommendation.recommendedMode}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          {aiRecommendation.explanation}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShipmentType(aiRecommendation.recommendedMode);
+                            toast.success(`Applied recommended mode: ${aiRecommendation.recommendedMode}`);
+                          }}
+                          className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition"
+                        >
+                          Apply Recommended Mode
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -729,7 +1041,7 @@ const CustomerDashboard = () => {
                         <span className="text-xs font-bold text-emerald-600">₹{calculatedCost.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-xs text-slate-500 font-semibold">AI Transit Duration</span>
+                        <span className="text-xs text-slate-500 font-semibold">Estimated Transit Duration</span>
                         <span className="text-xs font-bold text-indigo-600">{calculatedDays || 'N/A'} Days</span>
                       </div>
                     </div>
@@ -800,7 +1112,16 @@ const CustomerDashboard = () => {
             {/* TAB 5: BILLING INVOICES */}
             {activeTab === 'invoices' && (
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in">
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Billing Ledger logs</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5 border-b border-slate-100 pb-4">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Billing Ledger logs</h3>
+                  <button
+                    onClick={exportInvoicesToCSV}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 self-start sm:self-auto shadow-sm"
+                  >
+                    <Download size={14} />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
@@ -927,6 +1248,92 @@ const CustomerDashboard = () => {
               </div>
             )}
 
+            {/* TAB 8: SUPPORT CHAT */}
+            {activeTab === 'chat' && (
+              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-[550px] overflow-hidden animate-fade-in">
+                {/* Chat Header */}
+                <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Support Desk Chat</h3>
+                      <p className="text-[10px] text-slate-400 font-bold">Ask questions in real-time</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setChatMode(prev => prev === 'ai' ? 'staff' : 'ai')}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition duration-150 flex items-center space-x-1.5 ${
+                        chatMode === 'ai'
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>🤖 {chatMode === 'ai' ? 'AI Assistant: ON' : 'Talk to AI'}</span>
+                    </button>
+                    <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                      <span>Support Agents Online</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Chat Log */}
+                <div className="flex-1 p-5 overflow-y-auto bg-slate-50/50 space-y-4">
+                  {chatMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2">
+                      <MessageSquare size={36} className="text-slate-300 stroke-[1.5]" />
+                      <p className="text-xs italic">No messages yet. Send a message to start chatting with support!</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, idx) => {
+                      const isMe = msg.senderId === user.id;
+                      return (
+                        <div key={msg._id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-xs md:max-w-md rounded-2xl p-3.5 shadow-sm text-xs ${
+                            isMe 
+                              ? 'bg-indigo-600 text-white rounded-tr-none' 
+                              : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
+                          }`}>
+                            {!isMe && (
+                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide mb-1">
+                                {msg.senderName} ({msg.senderRole})
+                              </p>
+                            )}
+                            <p className="leading-relaxed">{msg.message}</p>
+                            <span className={`text-[8px] block text-right mt-1 font-semibold ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                              {new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatBottomRef} />
+                </div>
+
+                {/* Chat Input */}
+                <form onSubmit={handleSendChatMessage} className="p-4 border-t border-slate-200 bg-white flex items-center space-x-3">
+                  <input
+                    type="text"
+                    placeholder="Type your message here..."
+                    value={newMessageText}
+                    onChange={(e) => setNewMessageText(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
+                  />
+                  <button
+                    type="submit"
+                    className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition flex items-center justify-center border border-transparent"
+                  >
+                    <Send size={16} />
+                  </button>
+                </form>
+              </div>
+            )}
+
           </div>
 
           {/* Live WS timeline tracking side drawer */}
@@ -940,6 +1347,9 @@ const CustomerDashboard = () => {
                   </div>
                   <button onClick={() => setTrackedShipment(null)} className="text-slate-400 hover:text-slate-600 text-xs font-bold">✕ Close</button>
                 </div>
+
+                {/* Map widget */}
+                <div id="tracking-map" className="mb-6 h-[200px] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner z-10"></div>
 
                 <div className="space-y-6 pl-2 relative">
                   <div className="absolute left-[13px] top-[10px] bottom-[10px] w-0.5 bg-slate-100"></div>
@@ -968,6 +1378,92 @@ const CustomerDashboard = () => {
 
         </div>
       </main>
+
+      {/* Floating AI Chatbot Widget */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        {/* Chat Panel */}
+        {floatingChatOpen && (
+          <div className="w-[340px] h-[450px] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-4 animate-fade-in">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 text-white flex items-center justify-between shadow-sm">
+              <div className="flex items-center space-x-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="font-extrabold text-xs tracking-wider uppercase">SmartShip AI Assistant</span>
+              </div>
+              <button 
+                onClick={() => setFloatingChatOpen(false)}
+                className="text-white hover:text-indigo-200 text-sm font-bold bg-white/10 rounded-full h-6 w-6 flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Message Area */}
+            <div className="flex-1 p-4 overflow-y-auto bg-slate-50/50 space-y-3">
+              {floatingMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.isAi ? 'justify-start' : 'justify-end'}`}>
+                  <div className={`max-w-[80%] rounded-2xl p-3 text-xs shadow-sm ${
+                    msg.isAi 
+                      ? 'bg-white text-slate-800 border border-slate-100 rounded-tl-none' 
+                      : 'bg-indigo-600 text-white rounded-tr-none'
+                  }`}>
+                    <p className="leading-relaxed">{msg.text}</p>
+                    <span className={`text-[8px] block text-right mt-1 font-semibold ${msg.isAi ? 'text-slate-400' : 'text-indigo-200'}`}>
+                      {new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {floatingLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white text-slate-400 border border-slate-100 rounded-2xl rounded-tl-none p-3 text-xs shadow-sm flex items-center space-x-1.5">
+                    <span className="h-1.5 w-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="h-1.5 w-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="h-1.5 w-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                </div>
+              )}
+              <div ref={floatingChatBottomRef} />
+            </div>
+
+            {/* Input Form */}
+            <form onSubmit={handleSendFloatingMessage} className="p-3 border-t border-slate-200 bg-white flex items-center space-x-2">
+              <input
+                type="text"
+                value={floatingInput}
+                onChange={(e) => setFloatingInput(e.target.value)}
+                placeholder="Ask AI anything..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
+              />
+              <button
+                type="submit"
+                disabled={floatingLoading}
+                className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition flex items-center justify-center border border-transparent disabled:opacity-50"
+              >
+                <Send size={14} />
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Floating Bubble Button */}
+        <button
+          onClick={() => setFloatingChatOpen(prev => !prev)}
+          className="h-14 w-14 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg hover:shadow-indigo-glow border border-indigo-400/20 hover:scale-105 active:scale-95 transition duration-150 relative"
+        >
+          {floatingChatOpen ? (
+            <span className="text-xl font-bold">✕</span>
+          ) : (
+            <span className="text-2xl animate-pulse">🤖</span>
+          )}
+          {!floatingChatOpen && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500 border-2 border-white"></span>
+            </span>
+          )}
+        </button>
+      </div>
 
     </div>
   );

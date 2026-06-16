@@ -22,6 +22,21 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response && error.response.status === 401) {
+          logout();
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   const fetchCurrentUser = async () => {
     try {
       const response = await axios.get('/auth/me');
@@ -43,6 +58,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.post('/auth/login', { email, password });
       if (response.data.success) {
         localStorage.setItem('token', response.data.token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
         setToken(response.data.token);
         setUser(response.data.user);
         return { success: true, user: response.data.user };
@@ -60,6 +76,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.post('/auth/register', { name, email, password, phone, role: 'customer' });
       if (response.data.success) {
         localStorage.setItem('token', response.data.token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
         setToken(response.data.token);
         setUser(response.data.user);
         return { success: true, user: response.data.user };

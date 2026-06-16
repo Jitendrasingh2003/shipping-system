@@ -235,7 +235,7 @@ const runDatabaseSeeder = async () => {
         dimensions: mock.dimensions,
         shipmentType: mock.shipmentType,
         status: mock.status,
-        predictedDeliveryDays: predictedDays,
+        estimatedDeliveryDays: predictedDays,
         paymentStatus: mock.paymentStatus,
         assignedStaffId: mock.assignStaff ? staff.id : null,
         assignedStaffName: mock.assignStaff ? staff.name : null,
