@@ -42,7 +42,7 @@ const callGemini = async (prompt) => {
  * AI Support Chatbot Response
  */
 const getAiChatResponse = async (message, roomId) => {
-  const prompt = `You are "SmartShip AI Assistant", a friendly, professional customer support bot for SmartShip Logistics. 
+  const prompt = `You are "Marine Bytes AI Assistant", a friendly, professional customer support bot for Marine Bytes Logistics. 
 Answer the following customer query directly. Keep the response concise, friendly, and under 3 sentences. 
 Context: The customer is logged into their dashboard (ID: ${roomId}). 
 If they ask to track a package, suggest going to "My Consignments" -> "Track Logs".
@@ -57,7 +57,7 @@ Customer query: "${message}"`;
     const cleanMsg = message.toLowerCase();
     
     if (cleanMsg.includes('hello') || cleanMsg.includes('hi') || cleanMsg.includes('hey')) {
-      return "Hello! I am your SmartShip AI Assistant. How can I help you today? You can ask me about tracking packages, shipping rates, or courier methods!";
+      return "Hello! I am your Marine Bytes AI Assistant. How can I help you today? You can ask me about tracking packages, shipping rates, or courier methods!";
     }
     if (cleanMsg.includes('track') || cleanMsg.includes('status') || cleanMsg.includes('where')) {
       return "To track your package in real-time, please navigate to the 'My Consignments' tab and click 'Track Logs' on your active booking. This will load our Leaflet Live Tracker!";
@@ -80,7 +80,7 @@ Customer query: "${message}"`;
  * AI Smart Route & Shipping Mode Recommender
  */
 const getAiRouteRecommendation = async (origin, destination, weight, urgency) => {
-  const prompt = `You are the SmartShip Route Optimization AI. A user wants to ship a package:
+  const prompt = `You are the Marine Bytes Route Optimization AI. A user wants to ship a package:
 - From: ${origin}
 - To: ${destination}
 - Weight: ${weight} kg

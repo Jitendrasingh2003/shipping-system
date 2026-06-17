@@ -58,7 +58,7 @@ export const SocketProvider = ({ children }) => {
       // Support chat alert notification
       socketInstance.on('chat:new_message_alert', (data) => {
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(`SmartShip Support Desk`, {
+          new Notification(`Marine Bytes Support Desk`, {
             body: `New message from ${data.senderName}: "${data.message}"`,
             icon: '/vite.svg'
           });

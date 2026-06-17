@@ -88,7 +88,7 @@ io.on('connection', (socket) => {
         const aiMsg = new ChatMessage({
           roomId: data.roomId,
           senderId: 'ai-assistant',
-          senderName: 'SmartShip AI Assistant',
+          senderName: 'Marine Bytes AI Assistant',
           senderRole: 'staff',
           message: aiMessageText
         });
@@ -134,7 +134,7 @@ app.use('/api/chat', chatRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: 'SmartShip API is running smoothly! 🚀',
+    message: 'Marine Bytes API is running smoothly! 🚀',
     mysqlActive: checkMySQLActive(),
     timestamp: new Date()
   });
@@ -167,7 +167,7 @@ const startServer = async () => {
   await runDatabaseSeeder();
 
   server.listen(PORT, () => {
-    console.log(`\n🚀 SmartShip Server running on port ${PORT}`);
+    console.log(`\n🚀 Marine Bytes Server running on port ${PORT}`);
     console.log(`📡 API URL: http://localhost:${PORT}/api`);
     console.log(`\n📋 Seeded Demo Credentials:`);
     console.log(`   Admin:    admin@shiptrack.com    / Admin@123`);

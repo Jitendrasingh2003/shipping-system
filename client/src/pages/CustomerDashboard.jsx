@@ -3,13 +3,18 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
 import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area
+} from 'recharts';
+import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
-  BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare
+  BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
+  BarChart2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat'];
 const SHIPMENT_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
+const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 const CustomerDashboard = () => {
   const { logout, user } = useAuth();
@@ -84,7 +89,7 @@ const CustomerDashboard = () => {
   // Floating AI Chatbot State
   const [floatingChatOpen, setFloatingChatOpen] = useState(false);
   const [floatingMessages, setFloatingMessages] = useState([
-    { text: "Hello! I am your SmartShip AI Assistant. How can I help you today?", isAi: true, time: new Date() }
+    { text: "Hello! I am your Marine Bytes AI Assistant. How can I help you today?", isAi: true, time: new Date() }
   ]);
   const [floatingInput, setFloatingInput] = useState('');
   const [floatingLoading, setFloatingLoading] = useState(false);
@@ -151,7 +156,7 @@ const CustomerDashboard = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `SmartShip-Invoices-Export-${Date.now()}.csv`);
+    link.setAttribute('download', `MarineBytes-Invoices-Export-${Date.now()}.csv`);
     link.click();
     toast.success('Invoices exported successfully!');
   };
@@ -612,7 +617,7 @@ const CustomerDashboard = () => {
         key: keyId,
         amount: order.amount,
         currency: order.currency,
-        name: 'SmartShip Logistics',
+        name: 'Marine Bytes Logistics',
         description: `Shipment cost for ${shipment.trackingId}`,
         order_id: order.id,
         handler: async (response) => {
@@ -689,7 +694,7 @@ const CustomerDashboard = () => {
               <Package size={20} />
             </div>
             <div>
-              <span className="font-extrabold text-slate-800 text-lg leading-none">SmartShip</span>
+              <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
               <span className="text-[10px] text-slate-400 block font-bold tracking-widest uppercase">Customer portal</span>
             </div>
           </div>
@@ -698,6 +703,7 @@ const CustomerDashboard = () => {
           <nav className="space-y-1">
             {[
               { id: 'orders', label: 'My Consignments', icon: Compass },
+              { id: 'analytics', label: 'Spend & Logistics Charts', icon: BarChart2 },
               { id: 'book', label: 'Book New Shipment', icon: PlusCircle },
               { id: 'calculator', label: 'Rate Calculator', icon: Calculator },
               { id: 'chat', label: 'Support Desk Chat', icon: MessageSquare },
@@ -861,6 +867,110 @@ const CustomerDashboard = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ANALYTICS */}
+            {activeTab === 'analytics' && (
+              <div className="space-y-8 animate-fade-in">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Spend & Logistics Analytics</h2>
+                  <p className="text-slate-500 text-sm mt-1">Detailed overview of your shipping patterns, expenses, and distribution.</p>
+                </div>
+
+                {/* Spend Trend Chart */}
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Monthly Spending Trend</h3>
+                    <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-bold">Last 6 Months</span>
+                  </div>
+                  <div className="h-72">
+                    {stats?.spendHistory && stats.spendHistory.some(h => h.amount > 0) ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={stats.spendHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+                          <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(value) => `₹${value}`} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }}
+                            formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Spent']}
+                          />
+                          <Area type="monotone" dataKey="amount" stroke="#4f46e5" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSpend)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center text-slate-400 text-xs italic">
+                        <span>No spend history logged yet.</span>
+                        <span className="text-[10px] text-slate-400 not-italic mt-1">Book and pay for a shipment to view your spending trend.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Grid for distribution charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  
+                  {/* Shipping Channel Pie */}
+                  <div className="lg:col-span-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Shipping Channels</h3>
+                    <div className="h-64 flex items-center justify-center">
+                      {stats?.typeBreakdown && Object.values(stats.typeBreakdown).some(v => v > 0) ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={Object.keys(stats.typeBreakdown).map(key => ({ name: key, value: stats.typeBreakdown[key] }))}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              {Object.keys(stats.typeBreakdown).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
+                            <Legend verticalAlign="bottom" height={36} fontSize={11} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipments registered yet.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Consignment Status Bar */}
+                  <div className="lg:col-span-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Consignment Lifecycle States</h3>
+                    <div className="h-64">
+                      {stats?.statusBreakdown && Object.values(stats.statusBreakdown).some(v => v > 0) ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={Object.keys(stats.statusBreakdown).map(key => ({ name: key, count: stats.statusBreakdown[key] }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
+                            <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
+                            <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]}>
+                              {Object.keys(stats.statusBreakdown).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No status history logged yet.</div>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}
@@ -1388,7 +1498,7 @@ const CustomerDashboard = () => {
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center space-x-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="font-extrabold text-xs tracking-wider uppercase">SmartShip AI Assistant</span>
+                <span className="font-extrabold text-xs tracking-wider uppercase">Marine Bytes AI Assistant</span>
               </div>
               <button 
                 onClick={() => setFloatingChatOpen(false)}

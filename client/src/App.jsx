@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 // Pages
 import PortalSelectPage from './pages/PortalSelectPage';
+import AdminLoginPage from './pages/AdminLoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import StaffDashboard from './pages/StaffDashboard';
 import CustomerDashboard from './pages/CustomerDashboard';
@@ -33,6 +34,7 @@ function App() {
           <Routes>
             {/* Public Portal & Login Selector */}
             <Route path="/" element={<PortalSelectPage />} />
+            <Route path="/admin-login" element={<AdminLoginPage />} />
 
             {/* Protected Admin Routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>

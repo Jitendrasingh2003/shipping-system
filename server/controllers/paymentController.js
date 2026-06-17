@@ -249,7 +249,7 @@ const downloadInvoicePdf = async (req, res, next) => {
     doc.pipe(res);
 
     // --- Header ---
-    doc.fillColor('#1e3a8a').fontSize(24).text('SmartShip Logistics', 50, 50);
+    doc.fillColor('#1e3a8a').fontSize(24).text('Marine Bytes Logistics', 50, 50);
     doc.fillColor('#4b5563').fontSize(10).text('AI-Powered Shipping & Logistics', 50, 80);
     
     // Invoice Metadata
@@ -308,7 +308,7 @@ const downloadInvoicePdf = async (req, res, next) => {
 
     // --- Footer ---
     doc.moveDown(4);
-    doc.fillColor('#9ca3af').fontSize(8).text('Thank you for shipping with SmartShip!', 50, 500, { align: 'center' });
+    doc.fillColor('#9ca3af').fontSize(8).text('Thank you for shipping with Marine Bytes!', 50, 500, { align: 'center' });
     doc.text('This is an electronically generated receipt and requires no physical signature.', 50, 515, { align: 'center' });
 
     doc.end();

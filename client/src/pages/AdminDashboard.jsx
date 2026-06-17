@@ -48,7 +48,7 @@ const AdminDashboard = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `SmartShip-Shipments-Export-${Date.now()}.csv`);
+    link.setAttribute('download', `MarineBytes-Shipments-Export-${Date.now()}.csv`);
     link.click();
     toast.success('Shipments exported successfully!');
   };
@@ -263,7 +263,7 @@ const AdminDashboard = () => {
               <Truck size={20} />
             </div>
             <div>
-              <span className="font-extrabold text-slate-800 text-lg leading-none">SmartShip</span>
+              <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
               <span className="text-[10px] text-slate-400 block font-bold tracking-widest uppercase">Admin Operations</span>
             </div>
           </div>
@@ -991,7 +991,7 @@ const InvoiceTable = ({ listUrl }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `SmartShip-Invoices-Export-${Date.now()}.csv`);
+    link.setAttribute('download', `MarineBytes-Invoices-Export-${Date.now()}.csv`);
     link.click();
     toast.success('Ledger exported successfully!');
   };

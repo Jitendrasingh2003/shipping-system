@@ -130,7 +130,7 @@ const StaffDashboard = () => {
               <Truck size={20} />
             </div>
             <div>
-              <span className="font-extrabold text-slate-800 text-lg leading-none">SmartShip</span>
+              <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
               <span className="text-[10px] text-indigo-600 block font-bold tracking-widest uppercase mt-0.5">Staff Console</span>
             </div>
           </div>
@@ -529,7 +529,7 @@ const StaffDashboard = () => {
               <div className="space-y-4 text-center md:text-left flex-1">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
-                  <p className="text-xs font-semibold text-slate-400">SmartShip Registered Logistics Officer</p>
+                  <p className="text-xs font-semibold text-slate-400">Marine Bytes Registered Logistics Officer</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-b border-slate-100 py-4 text-xs">
                   <div className="flex items-center space-x-2 text-slate-600">

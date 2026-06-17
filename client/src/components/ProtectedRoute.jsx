@@ -13,7 +13,8 @@ const ProtectedRoute = ({ allowedRoles }) => {
   }
 
   if (!token || !user) {
-    return <Navigate to="/" replace />;
+    const isOnlyAdmin = allowedRoles.includes('admin') && allowedRoles.length === 1;
+    return <Navigate to={isOnlyAdmin ? "/admin-login" : "/"} replace />;
   }
 
   if (!allowedRoles.includes(user.role)) {
