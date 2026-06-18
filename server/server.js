@@ -21,6 +21,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const logisticsRoutes = require('./routes/logisticsRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -129,6 +130,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/logistics', logisticsRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

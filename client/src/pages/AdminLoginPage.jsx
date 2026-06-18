@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Key, Lock, Mail, Loader2, CheckCircle2 } from 'lucide-react';
+import { Shield, Key, Lock, Mail, Loader2, Globe, Package, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const AdminLoginPage = () => {
@@ -53,8 +53,8 @@ const AdminLoginPage = () => {
         loop
         muted
         playsInline
-        className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none opacity-50 brightness-[0.6]"
-        src="/shipping-bg-real.webm"
+        className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none opacity-40 brightness-[0.5]"
+        src="/shipping-bg.mp4"
       />
       {/* Dark neutral overlay for video (removing heavy blue-purple tint) */}
       <div 
@@ -113,25 +113,28 @@ const AdminLoginPage = () => {
           {/* Secure checklist cards */}
           <div className="hidden md:block space-y-3 pt-2">
             {[
-              { text: "Encrypted Session Auth", desc: "JWT tokens & secure cookies protection." },
-              { text: "Relational User Logins", desc: "MySQL database storage with Mongo failover." },
-              { text: "Real-time Monitoring", desc: "Socket.io live tracking & support dispatchers." }
-            ].map((item, idx) => (
-              <div 
-                key={idx} 
-                className="flex items-start space-x-3 border p-3 rounded-xl backdrop-blur-sm"
-                style={{
-                  backgroundColor: 'rgba(17, 24, 39, 0.45)',
-                  borderColor: 'rgba(31, 41, 55, 0.5)'
-                }}
-              >
-                <CheckCircle2 size={16} className="text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold text-slate-200">{item.text}</h4>
-                  <p className="text-[10px] text-slate-400">{item.desc}</p>
+              { text: "Global Route Optimization", desc: "Real-time routing algorithms to minimize fuel and delivery delays.", icon: Globe },
+              { text: "Smart Container Tracking", desc: "IoT telemetry for temperature, humidity, and GPS coordinates.", icon: Package },
+              { text: "Automated Fleet Dispatch", desc: "AI-driven scheduling and automated cargo manifest generation.", icon: Truck }
+            ].map((item, idx) => {
+              const IconComponent = item.icon;
+              return (
+                <div 
+                  key={idx} 
+                  className="flex items-start space-x-3 border p-3 rounded-xl backdrop-blur-sm"
+                  style={{
+                    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+                    borderColor: 'rgba(31, 41, 55, 0.5)'
+                  }}
+                >
+                  <IconComponent size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-200">{item.text}</h4>
+                    <p className="text-[10px] text-slate-400">{item.desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

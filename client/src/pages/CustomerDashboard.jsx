@@ -8,7 +8,7 @@ import {
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
   BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
-  BarChart2
+  BarChart2, Coins
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -20,11 +20,21 @@ const CustomerDashboard = () => {
   const { logout, user } = useAuth();
   const socket = useSocket();
 
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'book' | 'calculator' | 'tickets' | 'invoices' | 'address' | 'alerts'
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'book' | 'calculator' | 'tickets' | 'invoices' | 'address' | 'alerts' | 'rates'
   const [stats, setStats] = useState(null);
   const [shipments, setShipments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // MySQL logistics rates configuration
+  const [rates, setRates] = useState({
+    base_fare: 150,
+    tax_rate: 18,
+    per_kg_fare: 50,
+    express_multiplier: 1.5,
+    air_multiplier: 2.5,
+    ocean_multiplier: 0.8
+  });
 
   // Form Booking State
   const [recipientName, setRecipientName] = useState('');
@@ -127,6 +137,12 @@ const CustomerDashboard = () => {
       const notifRes = await axios.get('/notifications');
       if (notifRes.data.success) {
         setNotifications(notifRes.data.notifications);
+      }
+
+      // Fetch dynamic tariff rates from MySQL
+      const ratesRes = await axios.get('/logistics/rates');
+      if (ratesRes.data.success && Object.keys(ratesRes.data.rates).length > 0) {
+        setRates(ratesRes.data.rates);
       }
     } catch (err) {
       toast.error('Failed to load portal data.');
@@ -410,14 +426,18 @@ const CustomerDashboard = () => {
       return toast.error('Origin and Destination cities must be different.');
     }
 
-    // Cost formula
-    let basePrice = 120.00;
-    let perKgRate = 45.00;
-    if (calcType === 'Express') { basePrice = 250.00; perKgRate = 80.00; }
-    else if (calcType === 'Air') { basePrice = 500.00; perKgRate = 150.00; }
-    else if (calcType === 'Ocean') { basePrice = 300.00; perKgRate = 35.00; }
+    // Cost formula using MySQL dynamic rates
+    const basePrice = rates.base_fare || 150.0;
+    const perKgRate = rates.per_kg_fare || 50.0;
+    const taxPercent = rates.tax_rate || 18.0;
+
+    let multiplier = 1.0;
+    if (calcType === 'Express') multiplier = rates.express_multiplier || 1.5;
+    else if (calcType === 'Air') multiplier = rates.air_multiplier || 2.5;
+    else if (calcType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
     
-    const cost = basePrice + (calcWeight * perKgRate);
+    const costBeforeTax = (basePrice + (calcWeight * perKgRate)) * multiplier;
+    const cost = costBeforeTax * (1 + (taxPercent / 100));
     setCalculatedCost(Math.round(cost * 100) / 100);
 
     // Call ML prediction endpoint for calculator
@@ -706,6 +726,7 @@ const CustomerDashboard = () => {
               { id: 'analytics', label: 'Spend & Logistics Charts', icon: BarChart2 },
               { id: 'book', label: 'Book New Shipment', icon: PlusCircle },
               { id: 'calculator', label: 'Rate Calculator', icon: Calculator },
+              { id: 'rates', label: 'Shipping Tariff Rates', icon: Coins },
               { id: 'chat', label: 'Support Desk Chat', icon: MessageSquare },
               { id: 'tickets', label: 'Support Tickets', icon: HelpCircle },
               { id: 'invoices', label: 'Billing Invoices', icon: FileText },
@@ -1044,6 +1065,35 @@ const CustomerDashboard = () => {
                     )}
                   </div>
 
+                  {/* Estimated Cost Card */}
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
+                      <Coins size={14} className="text-emerald-600" />
+                      <span>Estimated Cost Quote</span>
+                    </h4>
+                    <div className="text-center py-4 space-y-2">
+                      <span className="block text-3xl font-black text-emerald-600">
+                        ₹{(() => {
+                          const basePrice = rates.base_fare || 150.0;
+                          const perKgRate = rates.per_kg_fare || 50.0;
+                          const taxPercent = rates.tax_rate || 18.0;
+
+                          let multiplier = 1.0;
+                          if (shipmentType === 'Express') multiplier = rates.express_multiplier || 1.5;
+                          else if (shipmentType === 'Air') multiplier = rates.air_multiplier || 2.5;
+                          else if (shipmentType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
+                          
+                          const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier;
+                          const cost = costBeforeTax * (1 + (taxPercent / 100));
+                          return Math.round(cost * 100) / 100;
+                        })().toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                        Includes GST ({rates.tax_rate || 18}%) & Service factors
+                      </span>
+                    </div>
+                  </div>
+
                   {/* AI Recommender Card */}
                   <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5 border-b border-slate-100 pb-3">
@@ -1354,6 +1404,49 @@ const CustomerDashboard = () => {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SHIPPING TARIFF RATES (MySQL) */}
+            {activeTab === 'rates' && (
+              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm max-w-2xl animate-fade-in space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Logistics Shipping Tariff Rates</h2>
+                  <p className="text-slate-500 text-xs mt-1">Review active delivery rates and transport multipliers configured by administration (MySQL Stored).</p>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Base Booking Charge</span>
+                    <p className="text-lg font-black text-slate-800">₹{rates.base_fare || 150.0}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Flat fee charged for any parcel booking registration</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Service GST Tax</span>
+                    <p className="text-lg font-black text-slate-800">{rates.tax_rate || 18.0}%</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Standard goods and services tax applied on final cost</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Weight Rate per Kilogram</span>
+                    <p className="text-lg font-black text-slate-800">₹{rates.per_kg_fare || 50.0} / kg</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Additional payload weight charge</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Express Multiplier</span>
+                    <p className="text-lg font-black text-slate-800">{rates.express_multiplier || 1.5}x</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Fulfillment speed multiplier for Express priority</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Air Cargo Multiplier</span>
+                    <p className="text-lg font-black text-slate-800">{rates.air_multiplier || 2.5}x</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Transit route channel factor for Air dispatch</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ocean Freight Discount</span>
+                    <p className="text-lg font-black text-slate-800">{rates.ocean_multiplier || 0.8}x</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Slow transport discount applied for sea cargo routes</p>
+                  </div>
                 </div>
               </div>
             )}

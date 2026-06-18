@@ -64,6 +64,44 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create warehouses table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS warehouses (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        location VARCHAR(255) NOT NULL,
+        capacity DOUBLE NOT NULL,
+        current_load DOUBLE DEFAULT 0.0,
+        manager_name VARCHAR(255) DEFAULT 'Warehouse Manager',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create fleet table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS fleet (
+        id VARCHAR(36) PRIMARY KEY,
+        vehicle_number VARCHAR(50) UNIQUE NOT NULL,
+        vehicle_type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Idle',
+        driver_name VARCHAR(255) NOT NULL,
+        capacity DOUBLE NOT NULL,
+        current_route VARCHAR(255) DEFAULT 'Unassigned',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create rates table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS rates (
+        id VARCHAR(36) PRIMARY KEY,
+        rate_key VARCHAR(255) UNIQUE NOT NULL,
+        rate_value DOUBLE NOT NULL,
+        description VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     
     console.log('🐬 MySQL database tables checked/created.');
     connection.release();

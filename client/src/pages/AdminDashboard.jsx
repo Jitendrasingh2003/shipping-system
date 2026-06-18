@@ -8,7 +8,7 @@ import {
 import { 
   BarChart3, Users, Package, CreditCard, LogOut, CheckCircle, Clock, Navigation, AlertCircle, RefreshCw,
   ShieldAlert, Settings, FileText, UserCheck, Activity, Search, Trash2, Heart, PlusCircle, Check,
-  Truck, MessageSquare, Send, Download
+  Truck, MessageSquare, Send, Download, Layers, Map, Coins, Warehouse, Eye, Compass
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -149,6 +149,34 @@ const AdminDashboard = () => {
   const [baseFare, setBaseFare] = useState(150);
   const [systemAlerts, setSystemAlerts] = useState(true);
 
+  // New Logistics States (MySQL Backed)
+  const [warehouses, setWarehouses] = useState([]);
+  const [fleet, setFleet] = useState([]);
+  const [rates, setRates] = useState({
+    base_fare: 150,
+    tax_rate: 18,
+    per_kg_fare: 50,
+    express_multiplier: 1.5,
+    air_multiplier: 2.5,
+    ocean_multiplier: 0.8
+  });
+  
+  const [warehouseModal, setWarehouseModal] = useState(false);
+  const [fleetModal, setFleetModal] = useState(false);
+  const [selectedTransitShipment, setSelectedTransitShipment] = useState(null);
+
+  // Warehouse Form State
+  const [wName, setWName] = useState('');
+  const [wLocation, setWLocation] = useState('');
+  const [wCapacity, setWCapacity] = useState('');
+  const [wManager, setWManager] = useState('');
+
+  // Fleet Form State
+  const [fNumber, setFNumber] = useState('');
+  const [fType, setFType] = useState('Truck');
+  const [fDriver, setFDriver] = useState('');
+  const [fCapacity, setFCapacity] = useState('');
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -166,8 +194,27 @@ const AdminDashboard = () => {
       if (staffRes.data.success) {
         setStaffList(staffRes.data.staff);
       }
+
+      // Fetch MySQL Logistics data
+      const whRes = await axios.get('/logistics/warehouses');
+      if (whRes.data.success) {
+        setWarehouses(whRes.data.warehouses);
+      }
+
+      const flRes = await axios.get('/logistics/fleet');
+      if (flRes.data.success) {
+        setFleet(flRes.data.fleet);
+      }
+
+      const ratesRes = await axios.get('/logistics/rates');
+      if (ratesRes.data.success && Object.keys(ratesRes.data.rates).length > 0) {
+        setRates(ratesRes.data.rates);
+        // Also update the local state fallback settings
+        if (ratesRes.data.rates.base_fare) setBaseFare(ratesRes.data.rates.base_fare);
+        if (ratesRes.data.rates.tax_rate) setTaxRate(ratesRes.data.rates.tax_rate);
+      }
     } catch (err) {
-      toast.error('Failed to load dashboard data.');
+      console.error('Failed to load logistics parameters:', err.message);
     } finally {
       setLoading(false);
     }
@@ -176,6 +223,117 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Create Warehouse in MySQL
+  const handleCreateWarehouse = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post('/logistics/warehouses', {
+        name: wName,
+        location: wLocation,
+        capacity: parseFloat(wCapacity),
+        managerName: wManager
+      });
+      if (res.data.success) {
+        toast.success('Warehouse successfully registered in MySQL.');
+        setWarehouseModal(false);
+        setWName('');
+        setWLocation('');
+        setWCapacity('');
+        setWManager('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add warehouse.');
+    }
+  };
+
+  // Delete Warehouse from MySQL
+  const handleDeleteWarehouse = async (id) => {
+    if (!confirm('Are you sure you want to delete this warehouse from MySQL?')) return;
+    try {
+      const res = await axios.delete(`/logistics/warehouses/${id}`);
+      if (res.data.success) {
+        toast.success('Warehouse removed from MySQL.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to remove warehouse.');
+    }
+  };
+
+  // Create Fleet Vehicle in MySQL
+  const handleCreateFleet = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post('/logistics/fleet', {
+        vehicleNumber: fNumber,
+        vehicleType: fType,
+        driverName: fDriver,
+        capacity: parseFloat(fCapacity)
+      });
+      if (res.data.success) {
+        toast.success('Vehicle successfully added to fleet in MySQL.');
+        setFleetModal(false);
+        setFNumber('');
+        setFDriver('');
+        setFCapacity('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to register vehicle.');
+    }
+  };
+
+  // Toggle Vehicle Status
+  const handleToggleFleetStatus = async (id, currentStatus) => {
+    const nextStatus = currentStatus === 'Idle' ? 'In Transit' : currentStatus === 'In Transit' ? 'Maintenance' : 'Idle';
+    const nextRoute = nextStatus === 'In Transit' ? 'Simulated Route' : 'Unassigned';
+    try {
+      const res = await axios.put(`/logistics/fleet/${id}`, { status: nextStatus, currentRoute: nextRoute });
+      if (res.data.success) {
+        toast.success(`Vehicle status updated to: ${nextStatus}`);
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to update status.');
+    }
+  };
+
+  // Delete Fleet Vehicle from MySQL
+  const handleDeleteFleet = async (id) => {
+    if (!confirm('Remove vehicle from registry?')) return;
+    try {
+      const res = await axios.delete(`/logistics/fleet/${id}`);
+      if (res.data.success) {
+        toast.success('Vehicle deleted from MySQL.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to remove vehicle.');
+    }
+  };
+
+  // Save Tariff Rates to MySQL
+  const handleSaveRates = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post('/logistics/rates', { rates });
+      if (res.data.success) {
+        toast.success('Tariff configurations saved to MySQL.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to save configurations.');
+    }
+  };
+
+  const handleRateChange = (key, val) => {
+    setRates(prev => ({
+      ...prev,
+      [key]: parseFloat(val) || 0
+    }));
+  };
 
   const handleAssign = async (e) => {
     e.preventDefault();
@@ -273,10 +431,13 @@ const AdminDashboard = () => {
             {[
               { id: 'overview', label: 'Dashboard Overview', icon: BarChart3 },
               { id: 'shipments', label: 'Manage Shipments', icon: Package },
+              { id: 'warehouses', label: 'Warehouse Inventory', icon: Layers },
+              { id: 'fleet', label: 'Fleet & Vehicles', icon: Truck },
+              { id: 'rates', label: 'Shipping Rates', icon: Coins },
+              { id: 'transit', label: 'Live Transit Tracker', icon: Map },
               { id: 'users', label: 'Staff Directory', icon: UserCheck },
               { id: 'finance', label: 'Finance & Invoices', icon: FileText },
               { id: 'chats', label: 'Customer Support Chat', icon: MessageSquare },
-              { id: 'health', label: 'System Operations Monitor', icon: Activity },
               { id: 'settings', label: 'Control Settings', icon: Settings }
             ].map(tab => {
               const Icon = tab.icon;
@@ -688,41 +849,362 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 5: SYSTEM HEALTH MONITOR */}
-        {activeTab === 'health' && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 animate-fade-in">
-            <div className="md:col-span-5 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">System Node Monitor</h3>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-xs text-slate-500 font-semibold">Primary Database (MongoDB)</span>
-                  <span className="text-xs font-bold text-emerald-600">CONNECTED</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-xs text-slate-500 font-semibold">Relational Database (MySQL)</span>
-                  <span className="text-xs font-bold text-indigo-600">OPERATIONAL FALLBACK</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-xs text-slate-500 font-semibold">Backend API Server</span>
-                  <span className="text-xs font-mono text-slate-800">http://localhost:5000</span>
-                </div>
-                <div className="flex items-center justify-between p-3.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
-                  <span className="text-xs font-semibold">Main Web Server Status</span>
-                  <span className="text-xs font-bold uppercase">Online</span>
-                </div>
+
+        {/* TAB: WAREHOUSE INVENTORY (MySQL) */}
+        {activeTab === 'warehouses' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Warehouse Inventory Management</h2>
+                <p className="text-slate-500 text-sm mt-1">Monitor storage capacities, package load, and managers (Stored in MySQL).</p>
               </div>
+              <button
+                onClick={() => setWarehouseModal(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
+              >
+                <PlusCircle size={14} />
+                <span>Register Warehouse</span>
+              </button>
             </div>
 
-            <div className="md:col-span-7 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-4">Logistics Core Hubs</h3>
-              <p className="text-xs text-slate-500 leading-relaxed mb-4">
-                Active parcel routing centers and hubs directory in operation across major Indian cities:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat'].map(c => (
-                  <span key={c} className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-bold">{c}</span>
-                ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {warehouses.map(w => {
+                const loadPercent = Math.min(100, Math.round((w.currentLoad / w.capacity) * 100));
+                return (
+                  <div key={w.id} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <Warehouse size={20} />
+                      </div>
+                      <button
+                        onClick={() => handleDeleteWarehouse(w.id)}
+                        className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm">{w.name}</h3>
+                      <p className="text-slate-400 text-xs mt-0.5">{w.location}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="text-slate-400">Occupancy Capacity</span>
+                        <span className="text-slate-700">{w.currentLoad} / {w.capacity} kg ({loadPercent}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            loadPercent > 85 ? 'bg-red-500' : loadPercent > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${loadPercent}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs">
+                      <span className="text-slate-400">Supervisor Manager:</span>
+                      <span className="font-semibold text-slate-700">{w.managerName}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: FLEET & VEHICLES (MySQL) */}
+        {activeTab === 'fleet' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Logistics Fleet Registry</h2>
+                <p className="text-slate-500 text-sm mt-1">Manage transport assets, driver assignments, and vehicle statuses (Stored in MySQL).</p>
+              </div>
+              <button
+                onClick={() => setFleetModal(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
+              >
+                <PlusCircle size={14} />
+                <span>Register Vehicle</span>
+              </button>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold">
+                    <th className="p-4">Vehicle Number</th>
+                    <th className="p-4">Type</th>
+                    <th className="p-4">Capacity</th>
+                    <th className="p-4">Driver Name</th>
+                    <th className="p-4">Current Route</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {fleet.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-6 text-center text-slate-400 italic">No vehicles registered in MySQL fleet database.</td>
+                    </tr>
+                  ) : (
+                    fleet.map(vehicle => (
+                      <tr key={vehicle.id} className="hover:bg-slate-50/40 transition">
+                        <td className="p-4 font-bold text-slate-800">{vehicle.vehicleNumber}</td>
+                        <td className="p-4">
+                          <span className="px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700">
+                            {vehicle.vehicleType}
+                          </span>
+                        </td>
+                        <td className="p-4 font-medium">{vehicle.capacity} kg</td>
+                        <td className="p-4 text-slate-700 font-semibold">{vehicle.driverName}</td>
+                        <td className="p-4 text-slate-500">{vehicle.currentRoute}</td>
+                        <td className="p-4">
+                          <button
+                            onClick={() => handleToggleFleetStatus(vehicle.id, vehicle.status)}
+                            title="Click to toggle status (simulated update)"
+                            className={`px-2 py-1 rounded-full text-[10px] font-bold border transition ${
+                              vehicle.status === 'Idle' ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' :
+                              vehicle.status === 'In Transit' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' :
+                              'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                            }`}
+                          >
+                            {vehicle.status}
+                          </button>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleDeleteFleet(vehicle.id)}
+                            className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: SHIPPING RATES (MySQL) */}
+        {activeTab === 'rates' && (
+          <div className="space-y-6 animate-fade-in max-w-xl">
+            <div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Tariff & Rates Configuration</h2>
+              <p className="text-slate-500 text-sm mt-1">Configure logistics multipliers and base charges (Stored in MySQL).</p>
+            </div>
+
+            <form onSubmit={handleSaveRates} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Base Booking Fare (₹)</label>
+                  <input
+                    type="number"
+                    value={rates.base_fare || 0}
+                    onChange={(e) => handleRateChange('base_fare', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Service GST Tax Rate (%)</label>
+                  <input
+                    type="number"
+                    value={rates.tax_rate || 0}
+                    onChange={(e) => handleRateChange('tax_rate', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Charge per Kilogram (₹)</label>
+                  <input
+                    type="number"
+                    value={rates.per_kg_fare || 0}
+                    onChange={(e) => handleRateChange('per_kg_fare', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Express Multiplier (x)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rates.express_multiplier || 0}
+                    onChange={(e) => handleRateChange('express_multiplier', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Air Cargo Multiplier (x)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rates.air_multiplier || 0}
+                    onChange={(e) => handleRateChange('air_multiplier', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ocean Freight Discount (x)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rates.ocean_multiplier || 0}
+                    onChange={(e) => handleRateChange('ocean_multiplier', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm mt-4"
+              >
+                Save Configurations
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* TAB: LIVE TRANSIT MAP TRACKER */}
+        {activeTab === 'transit' && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Live Shipment Transit Tracker</h2>
+              <p className="text-slate-500 text-sm mt-1">Audit active cargo paths, delivery workflows, and simulated ETA telemetry.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Shipments List */}
+              <div className="lg:col-span-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-4 max-h-[500px] overflow-y-auto">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Active Shipments</h3>
+                {shipments.filter(s => s.status !== 'Delivered' && s.status !== 'Cancelled').length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No shipments currently in transit.</p>
+                ) : (
+                  shipments.filter(s => s.status !== 'Delivered' && s.status !== 'Cancelled').map(s => {
+                    const isSelected = selectedTransitShipment?._id === s._id;
+                    return (
+                      <button
+                        key={s._id}
+                        onClick={() => setSelectedTransitShipment(s)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition flex flex-col space-y-1 ${
+                          isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-slate-50 border-transparent hover:bg-slate-100/60'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center w-full">
+                          <span className="font-bold text-slate-800 text-[11px]">{s.trackingId}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[9px] font-bold uppercase">{s.shipmentType}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-500">
+                          <span>{s.originCity} → {s.destinationCity}</span>
+                          <span className="font-semibold text-indigo-600">{s.status}</span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Transit Map Telemetry Visualization */}
+              <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col min-h-[300px]">
+                {selectedTransitShipment ? (
+                  <div className="space-y-6 flex-1 flex flex-col justify-between">
+                    <div className="flex justify-between items-start pb-4 border-b border-slate-100">
+                      <div>
+                        <h3 className="font-extrabold text-slate-800 text-sm">Tracking ID: {selectedTransitShipment.trackingId}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Assigned Operator: {selectedTransitShipment.assignedStaffName || 'Not Assigned'}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Estimated Transit Days</span>
+                        <h4 className="text-lg font-black text-slate-800 mt-0.5">{selectedTransitShipment.estimatedDeliveryDays || '2.5'} Days</h4>
+                      </div>
+                    </div>
+
+                    {/* Path Illustration */}
+                    <div className="py-8 px-4 flex justify-between items-center relative">
+                      {/* Connecting Line */}
+                      <div className="absolute left-[10%] right-[10%] top-[50%] h-[4px] bg-slate-100 -translate-y-1/2 z-0 rounded-full"></div>
+                      <div 
+                        className="absolute left-[10%] top-[50%] h-[4px] bg-indigo-600 -translate-y-1/2 z-0 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${
+                            selectedTransitShipment.status === 'Booked' ? '20%' :
+                            selectedTransitShipment.status === 'Picked up' ? '45%' :
+                            selectedTransitShipment.status === 'In Transit' ? '70%' :
+                            selectedTransitShipment.status === 'Out for Delivery' ? '90%' : '5%'
+                          }`
+                        }}
+                      ></div>
+
+                      <div className="z-10 flex flex-col items-center">
+                        <div className="bg-indigo-600 text-white p-2.5 rounded-full shadow-md">
+                          <Warehouse size={16} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 mt-1">{selectedTransitShipment.originCity}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">Origin</span>
+                      </div>
+
+                      <div className="z-10 flex flex-col items-center">
+                        <div className={`p-2.5 rounded-full shadow-md transition-all ${
+                          selectedTransitShipment.status === 'In Transit' || selectedTransitShipment.status === 'Out for Delivery' 
+                            ? 'bg-indigo-600 text-white animate-bounce' 
+                            : 'bg-white text-slate-400 border border-slate-200'
+                        }`}>
+                          <Truck size={16} />
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500 mt-1">In Transit</span>
+                      </div>
+
+                      <div className="z-10 flex flex-col items-center">
+                        <div className={`p-2.5 rounded-full shadow-md ${
+                          selectedTransitShipment.status === 'Out for Delivery' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-200'
+                        }`}>
+                          <Navigation size={16} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 mt-1">{selectedTransitShipment.destinationCity}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">Destination</span>
+                      </div>
+                    </div>
+
+                    {/* Telemetry Metrics */}
+                    <div className="grid grid-cols-3 gap-4 border-t border-slate-100 pt-5">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Simulated Coordinates</p>
+                        <p className="text-xs font-mono font-bold text-slate-800 mt-1">
+                          {selectedTransitShipment.status === 'Booked' ? '19.0760° N, 72.8777° E' :
+                           selectedTransitShipment.status === 'Picked up' ? '18.9500° N, 73.1200° E' :
+                           selectedTransitShipment.status === 'In Transit' ? '15.4200° N, 75.3400° E' :
+                           '12.9716° N, 77.5946° E'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Transit Velocity</p>
+                        <p className="text-xs font-bold text-slate-800 mt-1">
+                          {selectedTransitShipment.shipmentType === 'Air' ? '540 km/h' :
+                           selectedTransitShipment.shipmentType === 'Express' ? '82 km/h' :
+                           selectedTransitShipment.shipmentType === 'Ocean' ? '28 knots' : '65 km/h'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Cargo Weight Payload</p>
+                        <p className="text-xs font-bold text-slate-800 mt-1">{selectedTransitShipment.weight} kg</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-xs italic">
+                    <Compass className="animate-spin text-slate-300 mb-3" size={32} />
+                    <span>Select an active shipment on the left to begin transit mapping.</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -889,6 +1371,158 @@ const AdminDashboard = () => {
         )}
 
       </main>
+
+      {/* Warehouse Registration Modal */}
+      {warehouseModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border border-slate-200 w-full max-w-md p-6 rounded-3xl shadow-xl relative animate-scale-up">
+            <h3 className="text-md font-bold mb-3">Register New Warehouse</h3>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">Add a logistics depot storage unit in MySQL database.</p>
+
+            <form onSubmit={handleCreateWarehouse} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Warehouse Name</label>
+                <input
+                  type="text"
+                  value={wName}
+                  onChange={(e) => setWName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                  placeholder="e.g. Navi Mumbai Port Depot"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Location Address</label>
+                <input
+                  type="text"
+                  value={wLocation}
+                  onChange={(e) => setWLocation(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                  placeholder="e.g. Sector-11, JNPT Navi Mumbai"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Capacity (kg)</label>
+                  <input
+                    type="number"
+                    value={wCapacity}
+                    onChange={(e) => setWCapacity(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                    placeholder="e.g. 50000"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Supervisor Name</label>
+                  <input
+                    type="text"
+                    value={wManager}
+                    onChange={(e) => setWManager(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                    placeholder="e.g. Ramesh Kumar"
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setWarehouseModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-indigo-glow"
+                >
+                  Save Warehouse
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fleet Registration Modal */}
+      {fleetModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border border-slate-200 w-full max-w-md p-6 rounded-3xl shadow-xl relative animate-scale-up">
+            <h3 className="text-md font-bold mb-3">Register Fleet Vehicle</h3>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">Register a new transport asset in MySQL fleet directory.</p>
+
+            <form onSubmit={handleCreateFleet} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Vehicle Plate Number</label>
+                <input
+                  type="text"
+                  value={fNumber}
+                  onChange={(e) => setFNumber(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                  placeholder="e.g. MH-03-TC-9876"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Vehicle Type</label>
+                  <select
+                    value={fType}
+                    onChange={(e) => setFType(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                    required
+                  >
+                    <option value="Truck">Truck</option>
+                    <option value="Container Ship">Container Ship</option>
+                    <option value="Delivery Van">Delivery Van</option>
+                    <option value="Cargo Plane">Cargo Plane</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Capacity Payload (kg)</label>
+                  <input
+                    type="number"
+                    value={fCapacity}
+                    onChange={(e) => setFCapacity(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                    placeholder="e.g. 15000"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Driver Name</label>
+                <input
+                  type="text"
+                  value={fDriver}
+                  onChange={(e) => setFDriver(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800"
+                  placeholder="e.g. Amit Kumar"
+                  required
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setFleetModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-indigo-glow"
+                >
+                  Register Vehicle
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Assignment Modal */}
       {assignModal && (

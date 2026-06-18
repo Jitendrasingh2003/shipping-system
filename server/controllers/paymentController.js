@@ -25,22 +25,43 @@ if (!isMockMode) {
 }
 
 // Cost calculation logic
-const calculateShipmentCost = (weight, shipmentType) => {
-  let basePrice = 120.00; // base charge in INR
-  let perKgRate = 45.00;
-  
-  if (shipmentType === 'Express') {
-    basePrice = 250.00;
-    perKgRate = 80.00;
-  } else if (shipmentType === 'Air') {
-    basePrice = 500.00;
-    perKgRate = 150.00;
-  } else if (shipmentType === 'Ocean') {
-    basePrice = 300.00;
-    perKgRate = 35.00;
+const calculateShipmentCost = async (weight, shipmentType) => {
+  let rates = {
+    base_fare: 150.0,
+    tax_rate: 18.0,
+    per_kg_fare: 50.0,
+    express_multiplier: 1.5,
+    air_multiplier: 2.5,
+    ocean_multiplier: 0.8
+  };
+
+  try {
+    if (checkMySQLActive()) {
+      const mysqlPool = getMySQLPool();
+      const [rows] = await mysqlPool.query('SELECT * FROM rates');
+      if (rows && rows.length > 0) {
+        const dbRates = {};
+        rows.forEach(r => {
+          dbRates[r.rate_key] = parseFloat(r.rate_value);
+        });
+        rates = { ...rates, ...dbRates };
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch rates from MySQL for billing, using defaults/in-memory:", err.message);
   }
-  
-  const cost = basePrice + (weight * perKgRate);
+
+  const basePrice = rates.base_fare || 150.0;
+  const perKgRate = rates.per_kg_fare || 50.0;
+  const taxPercent = rates.tax_rate || 18.0;
+
+  let multiplier = 1.0;
+  if (shipmentType === 'Express') multiplier = rates.express_multiplier || 1.5;
+  else if (shipmentType === 'Air') multiplier = rates.air_multiplier || 2.5;
+  else if (shipmentType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
+
+  const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier;
+  const cost = costBeforeTax * (1 + (taxPercent / 100));
   return Math.round(cost * 100) / 100; // round to 2 decimals
 };
 
@@ -54,7 +75,7 @@ const createOrder = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Shipment not found.' });
     }
 
-    const amount = calculateShipmentCost(shipment.weight, shipment.shipmentType);
+    const amount = await calculateShipmentCost(shipment.weight, shipment.shipmentType);
     const amountInPaise = Math.round(amount * 100); // Razorpay processes in paise
     const currency = 'INR';
     const receiptId = `rcpt_${shipment.trackingId}`;
@@ -149,7 +170,7 @@ const verifyPayment = async (req, res, next) => {
 
     // Update payment record in database to 'paid'
     const paymentId = razorpay_payment_id || `pay_mock_${Date.now()}`;
-    const amount = calculateShipmentCost(shipment.weight, shipment.shipmentType);
+    const amount = await calculateShipmentCost(shipment.weight, shipment.shipmentType);
 
     if (checkMySQLActive()) {
       const mysqlPool = getMySQLPool();

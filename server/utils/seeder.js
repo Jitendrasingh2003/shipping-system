@@ -283,6 +283,66 @@ const runDatabaseSeeder = async () => {
       }
     }
 
+    // 3. Seed Logistics Data in MySQL (Optional / Fallback checks)
+    if (checkMySQLActive()) {
+      const mysqlPool = getMySQLPool();
+
+      // Seed Warehouses
+      const [warehouseRows] = await mysqlPool.query('SELECT COUNT(*) as count FROM warehouses');
+      if (warehouseRows[0].count === 0) {
+        console.log('🌱 Seeding demo warehouses to MySQL...');
+        const mockWarehouses = [
+          { name: 'Mumbai Central Cargo Hub', location: 'JNPT Port Area, Navi Mumbai', capacity: 50000.0, current_load: 12450.0, manager: 'Ramesh K.' },
+          { name: 'Delhi NCR Fulfillment Center', location: 'Okhla Industrial Area Phase-III, New Delhi', capacity: 35000.0, current_load: 8320.0, manager: 'Sanjay Dutt' },
+          { name: 'Bangalore Air Cargo Terminal', location: 'Devanahalli, near KIAL, Bangalore', capacity: 25000.0, current_load: 18200.0, manager: 'Anita Roy' }
+        ];
+        for (const w of mockWarehouses) {
+          await mysqlPool.query(
+            'INSERT INTO warehouses (id, name, location, capacity, current_load, manager_name) VALUES (?, ?, ?, ?, ?, ?)',
+            [uuidv4(), w.name, w.location, w.capacity, w.current_load, w.manager]
+          );
+        }
+      }
+
+      // Seed Fleet
+      const [fleetRows] = await mysqlPool.query('SELECT COUNT(*) as count FROM fleet');
+      if (fleetRows[0].count === 0) {
+        console.log('🌱 Seeding demo fleet to MySQL...');
+        const mockFleet = [
+          { num: 'MH-03-TC-1234', type: 'Truck', status: 'In Transit', driver: 'Vikram Singh', cap: 12000.0, route: 'Mumbai → Bangalore' },
+          { num: 'DL-01-AB-9876', type: 'Delivery Van', status: 'Idle', driver: 'Amit Verma', cap: 1500.0, route: 'Unassigned' },
+          { num: 'KA-51-MM-5555', type: 'Truck', status: 'Maintenance', driver: 'Rajesh Gowda', cap: 8000.0, route: 'Unassigned' },
+          { num: 'IN-CARGO-901', type: 'Cargo Plane', status: 'In Transit', driver: 'Capt. Sandeep Sen', cap: 85000.0, route: 'Delhi → Kolkata' }
+        ];
+        for (const f of mockFleet) {
+          await mysqlPool.query(
+            'INSERT INTO fleet (id, vehicle_number, vehicle_type, status, driver_name, capacity, current_route) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), f.num, f.type, f.status, f.driver, f.cap, f.route]
+          );
+        }
+      }
+
+      // Seed Rates
+      const [ratesRows] = await mysqlPool.query('SELECT COUNT(*) as count FROM rates');
+      if (ratesRows[0].count === 0) {
+        console.log('🌱 Seeding demo rates to MySQL...');
+        const mockRates = [
+          { key: 'base_fare', value: 150.0, desc: 'Base charge for any new shipment booking' },
+          { key: 'tax_rate', value: 18.0, desc: 'Service GST percentage applied on checkout' },
+          { key: 'per_kg_fare', value: 50.0, desc: 'Additional charge per kilogram of shipment weight' },
+          { key: 'express_multiplier', value: 1.5, desc: 'Price multiplier for Express delivery' },
+          { key: 'air_multiplier', value: 2.5, desc: 'Price multiplier for Air shipping channels' },
+          { key: 'ocean_multiplier', value: 0.8, desc: 'Price discount/multiplier for Ocean shipping channels' }
+        ];
+        for (const r of mockRates) {
+          await mysqlPool.query(
+            'INSERT INTO rates (id, rate_key, rate_value, description) VALUES (?, ?, ?, ?)',
+            [uuidv4(), r.key, r.value, r.desc]
+          );
+        }
+      }
+    }
+
     console.log('✅ Dummy database seeding complete! 15+ mock shipments, invoices, and payment logs seeded.');
   } catch (err) {
     console.error('❌ Seeder error: ', err.message);
