@@ -5,12 +5,9 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-const connectMongoDB = require('./config/db.mongo');
-const { connectMySQL, initTables, checkMySQLActive, getMySQLPool } = require('./config/db.mysql');
-const UserMongo = require('./models/User.mongo');
+const { connectMySQL, initTables } = require('./config/db.mysql');
 const errorHandler = require('./middleware/errorHandler');
 const { generalLimiter } = require('./middleware/rateLimiter');
 
@@ -38,64 +35,57 @@ const io = new Server(server, {
 app.set('io', io);
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Socket Connected: ${socket.id}`);
+  console.log(`Socket Connected: ${socket.id}`);
 
-  // User join room for notifications
   socket.on('join:user', (userId) => {
     socket.join(`user:${userId}`);
-    console.log(`👤 User joined private room: user:${userId}`);
+    console.log(`User joined private room: user:${userId}`);
   });
 
-  // Shipment track room
   socket.on('join:shipment', (trackingId) => {
     socket.join(`shipment:${trackingId}`);
-    console.log(`📦 Tracker client joined shipment room: shipment:${trackingId}`);
+    console.log(`Tracker client joined shipment room: shipment:${trackingId}`);
   });
 
-  // Support chat room join
   socket.on('chat:join', (roomId) => {
     socket.join(`chat:${roomId}`);
-    console.log(`💬 User joined chat room: chat:${roomId}`);
+    console.log(`User joined chat room: chat:${roomId}`);
   });
 
-  // Support chat message handler
+  // Support chat message handler — save to MySQL
   socket.on('chat:send_message', async (data) => {
     try {
-      const ChatMessage = require('./models/ChatMessage');
-      const chatMsg = new ChatMessage({
-        roomId: data.roomId,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        senderRole: data.senderRole,
-        message: data.message
-      });
-      await chatMsg.save();
+      const { getMySQLPool } = require('./config/db.mysql');
+      const pool = getMySQLPool();
+      const id = uuidv4();
 
-      // Broadcast message to everyone in the specific chat room
+      await pool.query(
+        'INSERT INTO chat_messages (id, room_id, sender_id, sender_name, sender_role, message) VALUES (?, ?, ?, ?, ?, ?)',
+        [id, data.roomId, data.senderId, data.senderName, data.senderRole, data.message]
+      );
+
+      const chatMsg = { id, roomId: data.roomId, senderId: data.senderId, senderName: data.senderName, senderRole: data.senderRole, message: data.message, createdAt: new Date() };
+
       io.to(`chat:${data.roomId}`).emit('chat:message', chatMsg);
-
-      // Notify other active dashboard roles about a new message alert
       socket.broadcast.emit('chat:new_message_alert', {
         roomId: data.roomId,
         senderName: data.senderName,
         message: data.message
       });
 
-      // ---- AI Chatbot Auto-Reply ----
+      // AI Chatbot Auto-Reply
       if (data.senderRole === 'customer' && data.chatMode === 'ai') {
         const { getAiChatResponse } = require('./utils/aiHelper');
         const aiMessageText = await getAiChatResponse(data.message, data.roomId);
+        const aiId = uuidv4();
 
-        const aiMsg = new ChatMessage({
-          roomId: data.roomId,
-          senderId: 'ai-assistant',
-          senderName: 'Marine Bytes AI Assistant',
-          senderRole: 'staff',
-          message: aiMessageText
-        });
-        await aiMsg.save();
+        await pool.query(
+          'INSERT INTO chat_messages (id, room_id, sender_id, sender_name, sender_role, message) VALUES (?, ?, ?, ?, ?, ?)',
+          [aiId, data.roomId, 'ai-assistant', 'Marine Bytes AI Assistant', 'staff', aiMessageText]
+        );
 
-        // Broadcast AI reply to room with a slight typing delay
+        const aiMsg = { id: aiId, roomId: data.roomId, senderId: 'ai-assistant', senderName: 'Marine Bytes AI Assistant', senderRole: 'staff', message: aiMessageText, createdAt: new Date() };
+
         setTimeout(() => {
           io.to(`chat:${data.roomId}`).emit('chat:message', aiMsg);
         }, 800);
@@ -106,7 +96,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`🔌 Socket Disconnected: ${socket.id}`);
+    console.log(`Socket Disconnected: ${socket.id}`);
   });
 });
 
@@ -120,7 +110,6 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Apply rate limiter
 app.use('/api', generalLimiter);
 
 // Mount APIs
@@ -136,8 +125,8 @@ app.use('/api/logistics', logisticsRoutes);
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: 'Marine Bytes API is running smoothly! 🚀',
-    mysqlActive: checkMySQLActive(),
+    message: 'Marine Bytes API is running on MySQL!',
+    database: 'MySQL',
     timestamp: new Date()
   });
 });
@@ -147,39 +136,35 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: `API Endpoint ${req.originalUrl} not found` });
 });
 
-// Error Handler Middleware
+// Error Handler
 app.use(errorHandler);
 
-// Helper: Seed Demo Accounts if Database Empty
-// Start Server
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-  // 1. MongoDB Connect (Fatal if down)
-  await connectMongoDB();
+  // MySQL Connect (now REQUIRED — fatal if down)
+  await connectMySQL();
+  await initTables();
 
-  // 2. MySQL Connect (Non-Fatal fallback)
-  const mysqlPool = await connectMySQL();
-  if (mysqlPool) {
-    await initTables();
-  }
-
-  // 3. Seed Users & Shipments
+  // Seed database
   const { runDatabaseSeeder } = require('./utils/seeder');
   await runDatabaseSeeder();
 
   server.listen(PORT, () => {
-    console.log(`\n🚀 Marine Bytes Server running on port ${PORT}`);
-    console.log(`📡 API URL: http://localhost:${PORT}/api`);
-    console.log(`\n📋 Seeded Demo Credentials:`);
-    console.log(`   Admin:    admin@shiptrack.com    / Admin@123`);
-    console.log(`   Staff:    staff1@shiptrack.com   / Staff@123`);
-    console.log(`   Customer: customer1@shiptrack.com / Customer@123\n`);
+    console.log(`\nMarine Bytes Server running on port ${PORT}`);
+    console.log(`API URL: http://localhost:${PORT}/api`);
+    console.log(`\nDemo Credentials:`);
+    console.log(`  Admin:    admin@shiptrack.com    / Admin@123`);
+    console.log(`  Staff:    staff1@shiptrack.com   / Staff@123`);
+    console.log(`  Customer: customer1@shiptrack.com / Customer@123\n`);
   });
 };
 
 if (process.env.NODE_ENV !== 'test') {
-  startServer().catch(console.error);
+  startServer().catch((err) => {
+    console.error('Server failed to start:', err.message);
+    process.exit(1);
+  });
 }
 
 module.exports = app;

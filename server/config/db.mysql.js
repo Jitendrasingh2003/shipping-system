@@ -9,35 +9,33 @@ const connectMySQL = async () => {
       host: process.env.MYSQL_HOST || 'localhost',
       port: process.env.MYSQL_PORT || 3306,
       user: process.env.MYSQL_USER || 'root',
-      password: process.env.MYSQL_PASSWORD || 'root',
+      password: process.env.MYSQL_PASSWORD !== undefined ? process.env.MYSQL_PASSWORD : 'root',
       database: process.env.MYSQL_DATABASE || 'smartship',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     });
-    
-    // Check connection
+
     const connection = await pool.getConnection();
     console.log('🐬 MySQL Connected successfully!');
     connection.release();
     isMySQLConnected = true;
     return pool;
   } catch (error) {
-    console.warn(`⚠️ MySQL Connection failed (Optional Database): ${error.message}`);
-    console.warn(`ℹ️ Server will fallback to MongoDB for Auth & Payments.`);
+    console.error(`❌ MySQL Connection FAILED: ${error.message}`);
     isMySQLConnected = false;
     pool = null;
-    return null;
+    throw error; // Fatal — server will not start without MySQL
   }
 };
 
 const initTables = async () => {
   if (!pool || !isMySQLConnected) return;
-  
+
   try {
     const connection = await pool.getConnection();
-    
-    // Create users table
+
+    // USERS
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(36) PRIMARY KEY,
@@ -49,8 +47,8 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
-    // Create payments table
+
+    // PAYMENTS
     await connection.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id VARCHAR(36) PRIMARY KEY,
@@ -65,7 +63,7 @@ const initTables = async () => {
       )
     `);
 
-    // Create warehouses table
+    // WAREHOUSES
     await connection.query(`
       CREATE TABLE IF NOT EXISTS warehouses (
         id VARCHAR(36) PRIMARY KEY,
@@ -78,7 +76,7 @@ const initTables = async () => {
       )
     `);
 
-    // Create fleet table
+    // FLEET
     await connection.query(`
       CREATE TABLE IF NOT EXISTS fleet (
         id VARCHAR(36) PRIMARY KEY,
@@ -92,7 +90,7 @@ const initTables = async () => {
       )
     `);
 
-    // Create rates table
+    // RATES
     await connection.query(`
       CREATE TABLE IF NOT EXISTS rates (
         id VARCHAR(36) PRIMARY KEY,
@@ -102,11 +100,122 @@ const initTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
-    console.log('🐬 MySQL database tables checked/created.');
+
+    // SHIPMENTS (history stored as JSON text)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipments (
+        id VARCHAR(36) PRIMARY KEY,
+        tracking_id VARCHAR(100) NOT NULL UNIQUE,
+        sender_id VARCHAR(36) NOT NULL,
+        sender_name VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255) NOT NULL,
+        recipient_address TEXT NOT NULL,
+        origin_city VARCHAR(255) NOT NULL,
+        destination_city VARCHAR(255) NOT NULL,
+        weight DOUBLE NOT NULL,
+        dim_length DOUBLE NOT NULL DEFAULT 0,
+        dim_width DOUBLE NOT NULL DEFAULT 0,
+        dim_height DOUBLE NOT NULL DEFAULT 0,
+        shipment_type VARCHAR(50) DEFAULT 'Standard',
+        status VARCHAR(100) DEFAULT 'Pending Payment',
+        assigned_staff_id VARCHAR(36) DEFAULT NULL,
+        assigned_staff_name VARCHAR(255) DEFAULT NULL,
+        estimated_delivery_days DOUBLE DEFAULT NULL,
+        payment_status VARCHAR(50) DEFAULT 'Pending',
+        payment_id VARCHAR(255) DEFAULT NULL,
+        history JSON DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // INVOICES
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id VARCHAR(36) PRIMARY KEY,
+        invoice_number VARCHAR(100) NOT NULL UNIQUE,
+        shipment_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        payment_id VARCHAR(255) NOT NULL,
+        billing_name VARCHAR(255) DEFAULT '',
+        billing_email VARCHAR(255) DEFAULT '',
+        billing_phone VARCHAR(50) DEFAULT '',
+        billing_address TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // NOTIFICATIONS
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(100) DEFAULT 'general',
+        is_read TINYINT(1) DEFAULT 0,
+        shipment_id VARCHAR(36) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // ADDRESSES
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS addresses (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50) NOT NULL,
+        address TEXT NOT NULL,
+        city VARCHAR(255) NOT NULL,
+        pincode VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // TICKETS
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        sender_name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'General',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'open',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // CHAT MESSAGES
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id VARCHAR(36) PRIMARY KEY,
+        room_id VARCHAR(100) NOT NULL,
+        sender_id VARCHAR(100) NOT NULL,
+        sender_name VARCHAR(255) NOT NULL,
+        sender_role VARCHAR(50) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure signature column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN signature LONGTEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added signature column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table:', err.message);
+      }
+    }
+
+    console.log('🐬 MySQL: All tables checked/created successfully.');
     connection.release();
   } catch (error) {
     console.error(`❌ Error initializing MySQL tables: ${error.message}`);
+    throw error;
   }
 };
 

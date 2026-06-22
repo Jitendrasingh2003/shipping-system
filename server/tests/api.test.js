@@ -1,21 +1,34 @@
 const request = require('supertest');
-const mongoose = require('mongoose');
 const app = require('../server');
-const UserMongo = require('../models/User.mongo');
-const Shipment = require('../models/Shipment');
+const { connectMySQL, initTables, getMySQLPool } = require('../config/db.mysql');
+
+let pool;
 
 beforeAll(async () => {
-  // Wait for mongoose to establish connection if not already
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/smartship');
-  }
+  await connectMySQL();
+  await initTables();
+  pool = getMySQLPool();
 });
 
 afterAll(async () => {
-  // Clean up connections
-  await UserMongo.deleteMany({});
-  await Shipment.deleteMany({});
-  await mongoose.connection.close();
+  // Clean up connections and test data
+  if (pool) {
+    try {
+      await pool.query('DELETE FROM shipments WHERE sender_id IN (SELECT id FROM users WHERE email LIKE "test_%@example.com")');
+      await pool.query('DELETE FROM users WHERE email LIKE "test_%@example.com"');
+    } catch (err) {
+      console.error('Error during test cleanup:', err.message);
+    }
+    // We do not call pool.end() if the server is still running/reusing it, 
+    // but in test environment, pool is created specifically for the test.
+    // However, server has its own reference to the pool, so closing pool might raise warning or error.
+    // Let's check. Actually, calling pool.end() is fine if we are exiting the test run.
+    try {
+      await pool.end();
+    } catch (err) {
+      // Ignore
+    }
+  }
 });
 
 describe('SmartShip End-to-End API Integration tests', () => {
@@ -94,6 +107,6 @@ describe('SmartShip End-to-End API Integration tests', () => {
     expect(res.body.shipment.status).toBe('Pending Payment');
     expect(res.body.shipment.paymentStatus).toBe('Pending');
     
-    shipmentId = res.body.shipment._id;
+    shipmentId = res.body.shipment.id;
   });
 });

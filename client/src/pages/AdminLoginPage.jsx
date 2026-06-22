@@ -205,7 +205,7 @@ const AdminLoginPage = () => {
                 </div>
               </div>
 
-              <button
+               <button
                 type="submit"
                 disabled={submitting}
                 className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold rounded-xl py-4 transition duration-200 hover:scale-[1.01] active:scale-[0.99] mt-6"
@@ -222,6 +222,18 @@ const AdminLoginPage = () => {
                   </>
                 )}
               </button>
+
+              {/* Visit Website Button */}
+              <div className="border-t border-slate-800/60 mt-5 pt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => navigate('/welcome')}
+                  className="w-full py-2.5 px-4 bg-slate-950/45 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-indigo-400 hover:text-indigo-300 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-sm"
+                >
+                  <Globe size={14} className="animate-pulse" />
+                  <span>Visit Company Website</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>

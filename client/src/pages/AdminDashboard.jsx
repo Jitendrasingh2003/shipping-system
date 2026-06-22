@@ -3,12 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
 import { 
   BarChart3, Users, Package, CreditCard, LogOut, CheckCircle, Clock, Navigation, AlertCircle, RefreshCw,
   ShieldAlert, Settings, FileText, UserCheck, Activity, Search, Trash2, Heart, PlusCircle, Check,
-  Truck, MessageSquare, Send, Download, Layers, Map, Coins, Warehouse, Eye, Compass
+  Truck, MessageSquare, Send, Download, Layers, Map, Coins, Warehouse, Eye, Compass, Sun, Cloud, CloudLightning, Anchor,
+  QrCode, Camera, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,8 +17,46 @@ const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
 
 const AdminDashboard = () => {
   const { logout, user } = useAuth();
-  const socket = useSocket();
-  
+  const { socket } = useSocket();
+  const [lang, setLang] = useState('en');
+  const t = (key) => {
+    const dict = {
+      en: {
+        dbOverview: 'Dashboard Overview',
+        liveFeed: 'LIVE FEED TELEMETRY',
+        totalShipments: 'Total Shipments',
+        revenueAudit: 'Revenue Audit (INR)',
+        activeUsers: 'Active Users',
+        fleetStatus: 'Fleet Status',
+        lifecycleVolume: 'Shipment Lifecycle Volume',
+        shippingChannels: 'Shipping Channels',
+        recentOps: 'Recent Operations Feed',
+        weatherHub: 'Hub Weather Conditions',
+        warehouseOccupancy: 'Warehouse Occupancy',
+        totalLoad: 'Total Load Used',
+        freeSpace: 'Free Space',
+        transitOnline: 'Transit Vehicles Online'
+      },
+      hi: {
+        dbOverview: 'डैशबोर्ड सिंहावलोकन',
+        liveFeed: 'लाइव फीड टेलीमेट्री',
+        totalShipments: 'कुल शिपमेंट',
+        revenueAudit: 'राजस्व लेखापरीक्षा (INR)',
+        activeUsers: 'सक्रिय उपयोगकर्ता',
+        fleetStatus: 'वाहन बेड़े की स्थिति',
+        lifecycleVolume: 'शिपमेंट जीवनचक्र मात्रा',
+        shippingChannels: 'शिपिंग चैनल (माध्यम)',
+        recentOps: 'हालिया संचालन फ़ीड',
+        weatherHub: 'हब मौसम की स्थिति',
+        warehouseOccupancy: 'वेयरहाउस अधिभोग (लोड)',
+        totalLoad: 'कुल प्रयुक्त वजन',
+        freeSpace: 'खाली स्थान',
+        transitOnline: 'पारगमन वाहन ऑनलाइन'
+      }
+    };
+    return dict[lang][key] || key;
+  };
+
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'shipments' | 'users' | 'finance' | 'audits' | 'health' | 'settings'
   const [activeChats, setActiveChats] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
@@ -136,6 +175,8 @@ const AdminDashboard = () => {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [qrModal, setQrModal] = useState(false);
+  const [scannedTrackingId, setScannedTrackingId] = useState('');
 
   // Register Staff State
   const [staffName, setStaffName] = useState('');
@@ -342,7 +383,7 @@ const AdminDashboard = () => {
     const staffObj = staffList.find(s => s.id === selectedStaff);
     
     try {
-      const res = await axios.put(`/shipments/${selectedShipment._id}/assign`, {
+      const res = await axios.put(`/shipments/${selectedShipment.id}/assign`, {
         staffId: selectedStaff,
         staffName: staffObj.name
       });
@@ -384,6 +425,20 @@ const AdminDashboard = () => {
     } finally {
       setRegistering(false);
     }
+  };
+
+  const handleQRScanSubmit = (e) => {
+    e.preventDefault();
+    if (!scannedTrackingId) {
+      return toast.error('Please select a tracking ID to scan.');
+    }
+    const exists = shipments.find(s => s.trackingId === scannedTrackingId);
+    if (!exists) {
+      return toast.error('Invalid QR Code. Consignment not found.');
+    }
+    setSearchQuery(scannedTrackingId);
+    setQrModal(false);
+    toast.success(`QR Scan Successful: ${scannedTrackingId} filtered!`);
   };
 
   if (loading) {
@@ -485,150 +540,354 @@ const AdminDashboard = () => {
       <main className="flex-1 p-6 md:p-10 max-h-screen overflow-y-auto">
         
         {/* TAB 1: OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8 animate-fade-in">
-            <div>
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Executive Dashboard</h2>
-              <p className="text-slate-500 text-sm mt-1">High-level shipping metrics, lifecycle volumes, and registrations.</p>
-            </div>
+        {activeTab === 'overview' && (() => {
+          const totalFleet = fleet.length;
+          const activeFleet = fleet.filter(f => f.status === 'In Transit' || f.status === 'Idle').length;
+          const fleetPercent = totalFleet > 0 ? Math.round((activeFleet / totalFleet) * 100) : 94;
 
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <Package size={22} />
-                </div>
+          const totalCapacity = warehouses.reduce((sum, w) => sum + w.capacity, 0);
+          const totalLoad = warehouses.reduce((sum, w) => sum + w.currentLoad, 0);
+          const warehouseUtilization = totalCapacity > 0 ? Math.round((totalLoad / totalCapacity) * 100) : 78;
+          const totalLoadFormatted = totalLoad >= 1000 ? `${(totalLoad / 1000).toFixed(1)}K` : totalLoad;
+          const totalCapacityFormatted = totalCapacity >= 1000 ? `${(totalCapacity / 1000).toFixed(1)}K` : totalCapacity;
+          const availableSpaceFormatted = Math.max(0, totalCapacity - totalLoad) >= 1000 ? `${(Math.max(0, totalCapacity - totalLoad) / 1000).toFixed(1)}K` : Math.max(0, totalCapacity - totalLoad);
+
+          const radius = 40;
+          const circumference = 2 * Math.PI * radius; // ~251.2
+          const strokeDashoffset = circumference - (warehouseUtilization / 100) * circumference;
+
+          return (
+            <div className="space-y-8 animate-fade-in">
+              {/* Dashboard Title Area */}
+              <div className="flex justify-between items-center pb-4 border-b border-slate-200">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Shipments</p>
-                  <h3 className="text-2xl font-black text-slate-800 mt-0.5">{stats?.totalShipments || 0}</h3>
+                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                    {t('dbOverview')}
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">Global logistics telemetry, real-time shipment workflows, and system health.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
+                    className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-indigo-600 font-bold py-1.5 px-3.5 rounded-xl shadow-sm transition flex items-center gap-1"
+                  >
+                    <Globe size={12} />
+                    <span>{lang === 'en' ? 'हिन्दी (HI)' : 'English (EN)'}</span>
+                  </button>
+                  <div className="text-xs bg-slate-100 border border-slate-200 text-indigo-600 font-mono py-1.5 px-3.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    {t('liveFeed')}
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
-                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <CreditCard size={22} />
+              {/* Stat Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {/* Total Shipments */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-32 relative group hover:shadow-md hover:border-slate-300 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('totalShipments')}</p>
+                      <h3 className="text-3xl font-black text-slate-800 mt-1">{stats?.totalShipments || 0}</h3>
+                    </div>
+                    <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                      <Package size={20} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded flex items-center font-mono border border-emerald-100">
+                      +8.4%
+                    </span>
+                    <span>vs last month</span>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Revenue Audit</p>
-                  <h3 className="text-2xl font-black text-slate-800 mt-0.5">₹{stats?.totalRevenue?.toLocaleString('en-IN') || '0.00'}</h3>
-                </div>
-              </div>
 
-              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
-                <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl">
-                  <Users size={22} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
-                  <h3 className="text-2xl font-black text-slate-800 mt-0.5">{stats?.totalUsers || 0}</h3>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center space-x-4">
-                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                  <Activity size={22} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Staff</p>
-                  <h3 className="text-2xl font-black text-slate-800 mt-0.5">{stats?.usersBreakdown?.staff || 0}</h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Graphs Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Lifecycle Bar */}
-              <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Shipment Lifecycle distribution</h3>
-                <div className="h-64">
-                  {statusData.length > 0 ? (
+                {/* Revenue Audit */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-32 relative group hover:shadow-md hover:border-slate-300 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('revenueAudit')}</p>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">₹{stats?.totalRevenue?.toLocaleString('en-IN') || '0.00'}</h3>
+                    </div>
+                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                      <CreditCard size={20} />
+                    </div>
+                  </div>
+                  {/* Revenue Sparkline inside the Card */}
+                  <div className="w-full h-8 overflow-hidden rounded">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={statusData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-                        <YAxis stroke="#94a3b8" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                        <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]}>
-                          {statusData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                      <AreaChart data={[
+                        { val: 3.2 }, { val: 3.5 }, { val: 3.1 }, { val: 3.8 }, { val: 3.6 }, { val: 4.0 }, { val: stats?.totalRevenue ? stats.totalRevenue / 1000 : 4.2 }
+                      ]}>
+                        <defs>
+                          <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="val" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#revenueGrad)" dot={false} />
+                      </AreaChart>
                     </ResponsiveContainer>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipment records found to plot lifecycle graphs.</div>
-                  )}
+                  </div>
+                </div>
+
+                {/* Total Users */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-32 relative group hover:shadow-md hover:border-slate-300 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('activeUsers')}</p>
+                      <h3 className="text-3xl font-black text-slate-800 mt-1">{stats?.totalUsers || 0}</h3>
+                    </div>
+                    <div className="p-2.5 bg-cyan-50 text-cyan-600 rounded-xl">
+                      <Users size={20} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="text-cyan-600 font-semibold bg-cyan-50 px-1.5 py-0.5 rounded flex items-center font-mono border border-cyan-100">
+                      +1.2%
+                    </span>
+                    <span>steady growth</span>
+                  </div>
+                </div>
+
+                {/* Active Fleet */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-32 relative group hover:shadow-md hover:border-slate-300 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('fleetStatus')}</p>
+                      <h3 className="text-3xl font-black text-slate-800 mt-1">{fleetPercent}%</h3>
+                    </div>
+                    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl relative">
+                      <Truck size={20} />
+                      <span className="absolute top-0 right-0 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-gradient-to-r from-amber-500 to-indigo-600 h-full rounded-full" style={{ width: `${fleetPercent}%` }}></div>
+                    </div>
+                    <p className="text-[9px] text-slate-400 text-right font-medium">{activeFleet}/{totalFleet || 6} {t('transitOnline')}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Methods Pie */}
-              <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Shipping Channels</h3>
-                <div className="h-64 flex items-center justify-center">
-                  {typeData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={typeData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {typeData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                        <Legend verticalAlign="bottom" height={36} fontSize={11} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipment channels logged.</div>
-                  )}
+              {/* Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Double Bar Lifecycle Chart */}
+                <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-5">{t('lifecycleVolume')}</h3>
+                  <div className="h-64">
+                    {statusData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={statusData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
+                          <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#1e293b' }}
+                            itemStyle={{ color: '#4f46e5' }}
+                          />
+                          <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                            {statusData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipment records found to plot lifecycle graphs.</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Recent Shipments */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-4">Recent Cargo Bookings</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-400 font-bold">
-                      <th className="pb-3">Tracking ID</th>
-                      <th className="pb-3">Sender</th>
-                      <th className="pb-3">Recipient</th>
-                      <th className="pb-3">Route</th>
-                      <th className="pb-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {stats?.recentShipments?.map((s) => (
-                      <tr key={s._id} className="hover:bg-slate-50/50 transition">
-                        <td className="py-3 font-semibold text-slate-700">{s.trackingId}</td>
-                        <td className="py-3">{s.senderName}</td>
-                        <td className="py-3">{s.recipientName}</td>
-                        <td className="py-3 font-medium">{s.originCity} → {s.destinationCity}</td>
-                        <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            s.status === 'Delivered' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700 animate-pulse'
-                          }`}>
-                            {s.status}
-                          </span>
-                        </td>
-                      </tr>
+                {/* Shipping Channels Pie Chart */}
+                <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">{t('shippingChannels')}</h3>
+                  <div className="h-44 flex items-center justify-center relative">
+                    {typeData.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={typeData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={70}
+                              paddingAngle={4}
+                              dataKey="value"
+                            >
+                              {typeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Volume</span>
+                          <span className="text-xl font-black text-slate-800">{stats?.totalShipments || 0}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipment channels logged.</div>
+                    )}
+                  </div>
+                  {/* Modern custom legend */}
+                  <div className="grid grid-cols-2 gap-2 mt-4 text-[10px] text-slate-500 font-medium">
+                    {typeData.map((t, idx) => (
+                      <div key={t.name} className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                        <span>{t.name} ({t.value})</span>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Row Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Live Activity Feed */}
+                <div className="lg:col-span-2 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col h-96">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2 pb-3 border-b border-slate-200">
+                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+                    {t('recentOps')}
+                  </h3>
+                  <div className="overflow-y-auto flex-1 pr-1 space-y-3 scrollbar-thin">
+                    {stats?.recentShipments && stats.recentShipments.length > 0 ? (
+                      stats.recentShipments.map((s) => {
+                        let Icon = Package;
+                        let iconColor = 'text-indigo-600 bg-indigo-50 border-indigo-100';
+                        if (s.status === 'Delivered') {
+                          Icon = CheckCircle;
+                          iconColor = 'text-emerald-600 bg-emerald-50 border-emerald-100';
+                        } else if (s.status === 'Pending Payment') {
+                          Icon = Clock;
+                          iconColor = 'text-amber-600 bg-amber-50 border-amber-100';
+                        } else if (s.status === 'In Transit' || s.status === 'Picked up') {
+                          Icon = Truck;
+                          iconColor = 'text-cyan-600 bg-cyan-50 border-cyan-100';
+                        } else if (s.status === 'Out for Delivery') {
+                          Icon = Navigation;
+                          iconColor = 'text-indigo-600 bg-indigo-50 border-indigo-100';
+                        }
+
+                        return (
+                          <div key={s.id} className="flex gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/50 hover:border-slate-200 transition group">
+                            <div className="mt-0.5">
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center ${iconColor}`}>
+                                <Icon size={14} />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] text-slate-700">
+                                <span className="font-semibold text-slate-800">{s.recipientName}</span>'s shipment ({s.originCity} → {s.destinationCity})
+                              </p>
+                              <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1">
+                                <span className="font-mono text-slate-400">{s.trackingId}</span>
+                                <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] uppercase ${
+                                  s.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100 animate-pulse'
+                                }`}>
+                                  {s.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-500 italic text-center py-6">No recent cargo logs.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Conditions Widget */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col h-96 relative overflow-hidden">
+                  <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: 'radial-gradient(circle at top right, rgba(99,102,241,0.4) 0%, transparent 60%)' }}></div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 pb-3 border-b border-slate-200 z-10">{t('weatherHub')}</h3>
+                  <div className="flex-1 flex flex-col justify-between space-y-3 z-10">
+                    {/* Singapore */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Singapore Terminal</p>
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">SGP • Ocean Hub 01</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-indigo-600">
+                        <CloudLightning size={20} />
+                        <span className="font-black text-sm text-slate-800">28°C</span>
+                      </div>
+                    </div>
+                    {/* Rotterdam */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Rotterdam Hub</p>
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">NLD • Cargo Depot 02</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Cloud size={20} />
+                        <span className="font-black text-sm text-slate-800">12°C</span>
+                      </div>
+                    </div>
+                    {/* New Jersey */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">New Jersey Airport</p>
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">USA • Air Terminal 03</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-amber-500">
+                        <Sun size={20} />
+                        <span className="font-black text-sm text-slate-800">22°C</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Warehouse utilization gauge */}
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col h-96 justify-between hover:shadow-md transition">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 pb-3 border-b border-slate-200">{t('warehouseOccupancy')}</h3>
+                  <div className="flex-1 flex flex-col items-center justify-center">
+                    <div className="relative w-36 h-36">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" fill="none" r={40} stroke="rgba(0,0,0,0.03)" strokeWidth={7}></circle>
+                        <circle 
+                          className="text-indigo-600 drop-shadow-[0_0_6px_rgba(99,102,241,0.2)]" 
+                          cx="50" 
+                          cy="50" 
+                          fill="none" 
+                          r={40} 
+                          stroke="currentColor" 
+                          strokeDasharray={251.2} 
+                          strokeDashoffset={strokeDashoffset} 
+                          strokeWidth={7}
+                          strokeLinecap="round"
+                        ></circle>
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-black text-slate-800 leading-none">{warehouseUtilization}<span className="text-sm font-bold text-slate-400">%</span></span>
+                      </div>
+                    </div>
+                    
+                    <div className="w-full mt-5 space-y-2 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">{t('totalLoad')}:</span>
+                        <span className="font-mono text-slate-700 font-bold">{totalLoadFormatted} kg</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${warehouseUtilization}%` }}></div>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-0.5">
+                        <span>{t('freeSpace')}:</span>
+                        <span className="font-mono">{availableSpaceFormatted} kg</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 2: SHIPMENTS REGISTRY */}
         {activeTab === 'shipments' && (
@@ -639,6 +898,18 @@ const AdminDashboard = () => {
                 <p className="text-slate-500 text-sm mt-1">Audit, assign staff operators, and update lifecycle states.</p>
               </div>
               <div className="flex items-center space-x-3 w-full md:w-auto">
+                <button
+                  onClick={() => {
+                    if (shipments.length > 0) {
+                      setScannedTrackingId(shipments[0].trackingId);
+                    }
+                    setQrModal(true);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white font-semibold shadow-sm transition text-xs flex items-center space-x-1.5 shrink-0"
+                >
+                  <QrCode size={14} />
+                  <span>Scan QR Code</span>
+                </button>
                 <button
                   onClick={exportShipmentsToCSV}
                   className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-700 font-semibold shadow-sm transition text-xs flex items-center space-x-1.5 shrink-0"
@@ -682,7 +953,7 @@ const AdminDashboard = () => {
                       </tr>
                     ) : (
                       filteredShipments.map((shipment) => (
-                        <tr key={shipment._id} className="hover:bg-slate-50/40 transition">
+                        <tr key={shipment.id} className="hover:bg-slate-50/40 transition">
                           <td className="p-4 font-bold text-slate-800">{shipment.trackingId}</td>
                           <td className="p-4">{shipment.senderName}</td>
                           <td className="p-4 font-medium text-slate-700">{shipment.recipientName}</td>
@@ -1090,10 +1361,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400 italic">No shipments currently in transit.</p>
                 ) : (
                   shipments.filter(s => s.status !== 'Delivered' && s.status !== 'Cancelled').map(s => {
-                    const isSelected = selectedTransitShipment?._id === s._id;
+                    const isSelected = selectedTransitShipment?.id === s.id;
                     return (
                       <button
-                        key={s._id}
+                        key={s.id}
                         onClick={() => setSelectedTransitShipment(s)}
                         className={`w-full text-left p-3.5 rounded-xl border transition flex flex-col space-y-1 ${
                           isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-slate-50 border-transparent hover:bg-slate-100/60'
@@ -1272,7 +1543,7 @@ const AdminDashboard = () => {
                     {chatMessages.map((msg, idx) => {
                       const isMe = msg.senderId === user.id;
                       return (
-                        <div key={msg._id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-xs md:max-w-md rounded-2xl p-3.5 shadow-sm text-xs ${
                             isMe 
                               ? 'bg-indigo-600 text-white rounded-tr-none' 
@@ -1533,7 +1804,7 @@ const AdminDashboard = () => {
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               Choose staff operator for Shipment <span className="font-bold text-slate-800">{selectedShipment?.trackingId}</span> ({selectedShipment?.originCity} → {selectedShipment?.destinationCity}).
             </p>
-
+ 
             <form onSubmit={handleAssign} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Select Staff</label>
@@ -1551,7 +1822,7 @@ const AdminDashboard = () => {
                   ))}
                 </select>
               </div>
-
+ 
               <div className="flex space-x-3 pt-2">
                 <button
                   type="button"
@@ -1565,6 +1836,81 @@ const AdminDashboard = () => {
                   className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-indigo-glow"
                 >
                   Confirm Assignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QR Scanner Simulation Modal */}
+      {qrModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md p-6 rounded-3xl shadow-2xl relative text-slate-100">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                <QrCode size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">QR / Barcode Simulation Registry</h3>
+                <p className="text-[10px] text-slate-400">Industrial Cargo Auditing & Tracking Scan</p>
+              </div>
+            </div>
+            
+            {/* Viewport Frame */}
+            <div className="relative w-full aspect-square max-w-[240px] mx-auto bg-black/60 rounded-2xl border border-slate-700 overflow-hidden mb-6 flex flex-col items-center justify-center">
+              <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-indigo-500"></div>
+              <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-500"></div>
+              <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-indigo-500"></div>
+              <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-indigo-500"></div>
+              
+              {/* Glowing Scan Laser Line */}
+              <div className="absolute left-0 right-0 h-[2px] bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-[scan_2s_infinite_ease-in-out]"></div>
+              
+              <div className="flex flex-col items-center space-y-2 opacity-60">
+                <Camera size={40} className="text-slate-500 animate-pulse" />
+                <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">SCANNING VIEWPORT</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleQRScanSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Select Shipment QR Code to Scan</label>
+                <select
+                  value={scannedTrackingId}
+                  onChange={(e) => setScannedTrackingId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition border-indigo-500/20"
+                  required
+                >
+                  <option value="">-- Choose Consignment --</option>
+                  {shipments.map((s) => (
+                    <option key={s.id} value={s.trackingId}>
+                      {s.trackingId} ({s.senderName} ➜ {s.recipientName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes scan {
+                  0%, 100% { top: 10%; }
+                  50% { top: 90%; }
+                }
+              `}} />
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setQrModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-[0_0_15px_rgba(79,70,229,0.4)]"
+                >
+                  Simulate Laser Scan
                 </button>
               </div>
             </form>
@@ -1660,11 +2006,11 @@ const InvoiceTable = ({ listUrl }) => {
             </tr>
           ) : (
             invoices.map((invoice) => (
-              <tr key={invoice._id} className="hover:bg-slate-50/40 transition">
+              <tr key={invoice.id} className="hover:bg-slate-50/40 transition">
                 <td className="py-3.5 font-bold text-slate-800">{invoice.invoiceNumber}</td>
                 <td className="py-3.5 font-medium">{invoice.billingDetails.name}</td>
                 <td className="py-3.5 text-slate-500 font-mono">{invoice.paymentId}</td>
-                <td className="py-3.5 font-bold text-emerald-600">₹{invoice.amount.toFixed(2)}</td>
+                <td className="py-3.5 font-bold text-emerald-600">₹{Number(invoice.amount || 0).toFixed(2)}</td>
                 <td className="py-3.5 text-right">
                   <button
                     onClick={() => handleDownload(invoice.invoiceNumber)}

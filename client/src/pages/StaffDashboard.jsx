@@ -5,7 +5,7 @@ import axios from 'axios';
 import { 
   Package, MapPin, CheckCircle, Clock, LogOut, RefreshCw, Send,
   Truck, ClipboardList, User, Award, Shield, ChevronRight, Activity, Calendar, Phone, MapPinIcon,
-  Layers, Warehouse, Map, Compass
+  Layers, Warehouse, Map, Compass, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,69 @@ const StaffDashboard = () => {
   const socket = useSocket();
   const mapRef = useRef(null);
   
+  const [lang, setLang] = useState('en');
+  const t = (key) => {
+    const dict = {
+      en: {
+        myDashboard: 'My Dashboard',
+        activeDeliveriesTab: 'Active Deliveries',
+        liveTransitTracker: 'Live Transit Tracker',
+        warehouseInventory: 'Warehouse Inventory',
+        fleetVehicles: 'Fleet & Vehicles',
+        completedHistory: 'Completed History',
+        operatorProfile: 'Operator Profile',
+        opsDashboard: 'Operations Dashboard',
+        activeDeliveriesTitle: 'Active Deliveries',
+        liveTransitTitle: 'Live Transit Tracker',
+        warehouseInventoryTitle: 'Warehouse Inventory',
+        fleetRegistryTitle: 'Fleet & Vehicle Registry',
+        completedShipmentsTitle: 'Completed Shipments',
+        carrierProfileTitle: 'Carrier Profile',
+        scanQRCode: 'Scan QR Code',
+        proofOfDelivery: 'Proof of Delivery',
+        signCanvasPlaceholder: 'Please sign below to confirm delivery receipt:',
+        clearSignature: 'Clear Signature',
+        saveSignature: 'Confirm & Submit Signature',
+        dashboardDesc: 'Manage your active deliveries, view KPIs, and track logistics performance metrics.',
+        activeDesc: 'Review assigned shipments, update transit hubs, and mark deliveries as complete.',
+        transitDesc: 'Monitor real-time shipment routing paths, GPS coordinates, and historical telemetry.',
+        warehousesDesc: 'Review active logistics depots, managers, and current capacities (MySQL-Backed).',
+        fleetDesc: 'Review active cargo transport assets. Tap vehicle status pills to toggle vehicle availability.',
+        historyDesc: 'Audit logs of completed, delivered, or cancelled logistics routes.',
+        profileDesc: 'Verify your logistics operator credentials, success ratings, and statistics.'
+      },
+      hi: {
+        myDashboard: 'मेरा डैशबोर्ड',
+        activeDeliveriesTab: 'सक्रिय डिलीवरी',
+        liveTransitTracker: 'लाइव ट्रांजिट ट्रैकर',
+        warehouseInventory: 'गोदाम सूची (इन्वेंट्री)',
+        fleetVehicles: 'वाहन बेड़ा (फ्लीट)',
+        completedHistory: 'पूरा इतिहास',
+        operatorProfile: 'ऑपरेटर प्रोफाइल',
+        opsDashboard: 'संचालन डैशबोर्ड',
+        activeDeliveriesTitle: 'सक्रिय डिलीवरी (पार्सल)',
+        liveTransitTitle: 'लाइव पारगमन ट्रैकर',
+        warehouseInventoryTitle: 'वेयरहाउस इन्वेंट्री',
+        fleetRegistryTitle: 'वाहन बेड़े की सूची',
+        completedShipmentsTitle: 'पूरे हुए शिपमेंट',
+        carrierProfileTitle: 'वाहक प्रोफाइल',
+        scanQRCode: 'क्यूआर कोड स्कैन करें',
+        proofOfDelivery: 'डिलीवरी का प्रमाण (हस्ताक्षर)',
+        signCanvasPlaceholder: 'डिलीवरी की पुष्टि के लिए कृपया नीचे हस्ताक्षर करें:',
+        clearSignature: 'हस्ताक्षर साफ़ करें',
+        saveSignature: 'पुष्टि करें और हस्ताक्षर जमा करें',
+        dashboardDesc: 'अपनी सक्रिय डिलीवरी प्रबंधित करें, प्रदर्शन मेट्रिक्स ट्रैक करें।',
+        activeDesc: 'सौंपे गए शिपमेंट की समीक्षा करें, पारगमन केंद्र अपडेट करें और डिलीवरी पूरी करें।',
+        transitDesc: 'वास्तविक समय में मार्ग, जीपीएस निर्देशांक और इतिहास की निगरानी करें।',
+        warehousesDesc: 'गोदामों, प्रबंधकों और क्षमता की समीक्षा करें (MySQL समर्थित)।',
+        fleetDesc: 'सक्रिय वाहनों की समीक्षा करें और वाहन उपलब्धता टॉगल करें।',
+        historyDesc: 'पूरे किए गए, डिलीवर किए गए या रद्द किए गए शिपमेंट का ऑडिट करें।',
+        profileDesc: 'अपने क्रेडेंशियल, सफलता दर और आँकड़ों को सत्यापित करें।'
+      }
+    };
+    return dict[lang][key] || key;
+  };
+
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'active' | 'transit' | 'history' | 'profile' | 'warehouses' | 'fleet'
   const [stats, setStats] = useState(null);
   const [shipments, setShipments] = useState([]);
@@ -38,6 +101,10 @@ const StaffDashboard = () => {
   const [newStatus, setNewStatus] = useState('');
   const [currentLocation, setCurrentLocation] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [qrModal, setQrModal] = useState(false);
+  const [scannedTrackingId, setScannedTrackingId] = useState('');
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -53,7 +120,7 @@ const StaffDashboard = () => {
       if (shipmentsRes.data.success) {
         setShipments(shipmentsRes.data.shipments);
         if (selectedTransitShipment) {
-          const updated = shipmentsRes.data.shipments.find(s => s._id === selectedTransitShipment._id);
+          const updated = shipmentsRes.data.shipments.find(s => s.id === selectedTransitShipment.id);
           if (updated) {
             setSelectedTransitShipment(updated);
             setTrackingLogs([...updated.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
@@ -231,6 +298,85 @@ const StaffDashboard = () => {
     };
   }, [selectedTransitShipment, trackingLogs, activeTab]);
 
+  const handleQRScanSubmit = (e) => {
+    e.preventDefault();
+    if (!scannedTrackingId) {
+      return toast.error('Please select a tracking ID to scan.');
+    }
+    const found = shipments.find(s => s.trackingId === scannedTrackingId);
+    if (!found) {
+      return toast.error('Invalid QR Code. Shipment not found.');
+    }
+    setSelectedShipment(found);
+    setNewStatus(found.status);
+    setCurrentLocation(found.currentLocation || found.originCity);
+    setQrModal(false);
+    setStatusModal(true);
+    toast.success(`QR Code Scanned: ${scannedTrackingId}. Status update panel loaded.`);
+  };
+
+  const startDrawing = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    
+    // Support mouse or touch events
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
+    
+    if (clientX === undefined || clientY === undefined) return;
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    // Smooth drawing style
+    ctx.strokeStyle = '#312e81'; // dark indigo
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
+    
+    if (clientX === undefined || clientY === undefined) return;
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    
+    // Prevent default scroll behaviors on mobile touch
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
   const handleUpdateStatus = async (e) => {
     e.preventDefault();
     if (!newStatus || !selectedShipment) return;
@@ -238,11 +384,20 @@ const StaffDashboard = () => {
       return toast.error('Please specify current transit location/hub name.');
     }
 
+    let signature = null;
+    if (newStatus === 'Delivered') {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        signature = canvas.toDataURL('image/png');
+      }
+    }
+
     setUpdating(true);
     try {
-      const res = await axios.put(`/shipments/${selectedShipment._id}/status`, {
+      const res = await axios.put(`/shipments/${selectedShipment.id}/status`, {
         status: newStatus,
-        location: currentLocation.trim()
+        location: currentLocation.trim(),
+        signature
       });
       if (res.data.success) {
         toast.success(`Shipment status updated to: ${newStatus}`);
@@ -304,26 +459,37 @@ const StaffDashboard = () => {
         <div className="space-y-6">
           
           {/* Logo */}
-          <div className="flex items-center space-x-3 px-2 py-3 border-b border-slate-100">
-            <div className="bg-indigo-600 p-2 text-white rounded-xl">
-              <Truck size={20} />
+          <div className="flex items-center justify-between px-2 py-3 border-b border-slate-100">
+            <div className="flex items-center space-x-3">
+              <div className="bg-indigo-600 p-2 text-white rounded-xl">
+                <Truck size={20} />
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
+                <span className="text-[10px] text-indigo-600 block font-bold tracking-widest uppercase mt-0.5">Staff Console</span>
+              </div>
             </div>
-            <div>
-              <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
-              <span className="text-[10px] text-indigo-600 block font-bold tracking-widest uppercase mt-0.5">Staff Console</span>
-            </div>
+            {/* Language Toggle */}
+            <button
+              onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
+              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition flex items-center space-x-1"
+              title="Toggle Language"
+            >
+              <Globe size={13} />
+              <span className="uppercase text-[9px] font-extrabold">{lang}</span>
+            </button>
           </div>
 
           {/* Navigation Links */}
           <nav className="space-y-1">
             {[
-              { id: 'dashboard', label: 'My Dashboard', icon: ClipboardList },
-              { id: 'active', label: 'Active Deliveries', icon: Truck, count: activeDeliveries.length },
-              { id: 'transit', label: 'Live Transit Tracker', icon: Map },
-              { id: 'warehouses', label: 'Warehouse Inventory', icon: Layers },
-              { id: 'fleet', label: 'Fleet & Vehicles', icon: Truck },
-              { id: 'history', label: 'Completed History', icon: Clock },
-              { id: 'profile', label: 'Operator Profile', icon: User }
+              { id: 'dashboard', label: t('myDashboard'), icon: ClipboardList },
+              { id: 'active', label: t('activeDeliveriesTab'), icon: Truck, count: activeDeliveries.length },
+              { id: 'transit', label: t('liveTransitTracker'), icon: Map },
+              { id: 'warehouses', label: t('warehouseInventory'), icon: Layers },
+              { id: 'fleet', label: t('fleetVehicles'), icon: Truck },
+              { id: 'history', label: t('completedHistory'), icon: Clock },
+              { id: 'profile', label: t('operatorProfile'), icon: User }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -385,22 +551,22 @@ const StaffDashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200 mb-8 gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight capitalize">
-              {activeTab === 'dashboard' && 'Operations Dashboard'}
-              {activeTab === 'active' && 'Active Deliveries'}
-              {activeTab === 'transit' && 'Live Transit Tracker'}
-              {activeTab === 'warehouses' && 'Warehouse Inventory'}
-              {activeTab === 'fleet' && 'Fleet & Vehicle Registry'}
-              {activeTab === 'history' && 'Completed Shipments'}
-              {activeTab === 'profile' && 'Carrier Profile'}
+              {activeTab === 'dashboard' && t('opsDashboard')}
+              {activeTab === 'active' && t('activeDeliveriesTitle')}
+              {activeTab === 'transit' && t('liveTransitTitle')}
+              {activeTab === 'warehouses' && t('warehouseInventoryTitle')}
+              {activeTab === 'fleet' && t('fleetRegistryTitle')}
+              {activeTab === 'history' && t('completedShipmentsTitle')}
+              {activeTab === 'profile' && t('carrierProfileTitle')}
             </h1>
             <p className="text-slate-500 text-xs mt-1">
-              {activeTab === 'dashboard' && 'Manage your active deliveries, view KPIs, and track logistics performance metrics.'}
-              {activeTab === 'active' && 'Review assigned shipments, update transit hubs, and mark deliveries as complete.'}
-              {activeTab === 'transit' && 'Monitor real-time shipment routing paths, GPS coordinates, and historical telemetry.'}
-              {activeTab === 'warehouses' && 'Review active logistics depots, managers, and current capacities (MySQL-Backed).'}
-              {activeTab === 'fleet' && 'Review active cargo transport assets. Tap vehicle status pills to toggle vehicle availability.'}
-              {activeTab === 'history' && 'Audit logs of completed, delivered, or cancelled logistics routes.'}
-              {activeTab === 'profile' && 'Verify your logistics operator credentials, success ratings, and statistics.'}
+              {activeTab === 'dashboard' && t('dashboardDesc')}
+              {activeTab === 'active' && t('activeDesc')}
+              {activeTab === 'transit' && t('transitDesc')}
+              {activeTab === 'warehouses' && t('warehousesDesc')}
+              {activeTab === 'fleet' && t('fleetDesc')}
+              {activeTab === 'history' && t('historyDesc')}
+              {activeTab === 'profile' && t('profileDesc')}
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -502,7 +668,7 @@ const StaffDashboard = () => {
                       </tr>
                     ) : (
                       shipments.slice(0, 5).map((s) => (
-                        <tr key={s._id} className="hover:bg-slate-50/50 transition">
+                        <tr key={s.id} className="hover:bg-slate-50/50 transition">
                           <td className="py-3.5 font-bold text-slate-800">{s.trackingId}</td>
                           <td className="py-3.5 font-medium text-slate-700">{s.recipientName}</td>
                           <td className="py-3.5">{s.originCity} → {s.destinationCity}</td>
@@ -559,7 +725,21 @@ const StaffDashboard = () => {
           <div className="space-y-6 animate-fade-in">
             {/* Filter Bar */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
-              <span className="text-xs font-bold text-slate-600">Showing {filteredActive.length} Assigned Parcels</span>
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-bold text-slate-600">Showing {filteredActive.length} Assigned Parcels</span>
+                <button
+                  onClick={() => {
+                    if (activeDeliveries.length > 0) {
+                      setScannedTrackingId(activeDeliveries[0].trackingId);
+                    }
+                    setQrModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
+                >
+                  <QrCode size={13} />
+                  <span>Scan QR Code</span>
+                </button>
+              </div>
               <div className="relative w-full md:w-80">
                 <input
                   type="text"
@@ -580,7 +760,7 @@ const StaffDashboard = () => {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredActive.map((s) => (
-                  <div key={s._id} className="premium-card rounded-2xl overflow-hidden hover:shadow-md transition border border-slate-200 flex flex-col justify-between">
+                  <div key={s.id} className="premium-card rounded-2xl overflow-hidden hover:shadow-md transition border border-slate-200 flex flex-col justify-between">
                     
                     {/* Card Header */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -688,10 +868,10 @@ const StaffDashboard = () => {
                   <p className="text-xs text-slate-400 italic py-4">No active shipments assigned to you.</p>
                 ) : (
                   activeDeliveries.map(s => {
-                    const isSelected = selectedTransitShipment?._id === s._id;
+                    const isSelected = selectedTransitShipment?.id === s.id;
                     return (
                       <button
-                        key={s._id}
+                        key={s.id}
                         onClick={() => {
                           setSelectedTransitShipment(s);
                           setTrackingLogs([...s.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
@@ -975,7 +1155,7 @@ const StaffDashboard = () => {
                     </tr>
                   ) : (
                     historyDeliveries.map((s) => (
-                      <tr key={s._id} className="hover:bg-slate-50/40 transition">
+                      <tr key={s.id} className="hover:bg-slate-50/40 transition">
                         <td className="py-3.5 font-bold text-slate-800">{s.trackingId}</td>
                         <td className="py-3.5 font-medium">{s.recipientName}</td>
                         <td className="py-3.5">{s.originCity} → {s.destinationCity}</td>
@@ -1159,6 +1339,39 @@ const StaffDashboard = () => {
                 </div>
               </div>
 
+              {newStatus === 'Delivered' && (
+                <div className="space-y-2 animate-fade-in">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    {t('proofOfDelivery')} (Customer Signature)
+                  </label>
+                  <p className="text-[10px] text-slate-500 italic mb-2">
+                    {t('signCanvasPlaceholder')}
+                  </p>
+                  <div className="border border-slate-200 bg-slate-50 rounded-xl overflow-hidden relative">
+                    <canvas
+                      ref={canvasRef}
+                      width={380}
+                      height={120}
+                      className="w-full h-[120px] bg-slate-50 cursor-crosshair touch-none"
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                    />
+                    <button
+                      type="button"
+                      onClick={clearCanvas}
+                      className="absolute bottom-2 right-2 px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-[9px] font-bold transition uppercase tracking-wider shadow-sm"
+                    >
+                      {t('clearSignature')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex space-x-3 pt-3">
                 <button
                   type="button"
@@ -1174,6 +1387,81 @@ const StaffDashboard = () => {
                 >
                   <Send size={12} />
                   <span>{updating ? 'Updating...' : 'Submit Progress'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QR Scanner Simulation Modal */}
+      {qrModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md p-6 rounded-3xl shadow-2xl relative text-slate-100">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                <QrCode size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">QR / Barcode Simulation Console</h3>
+                <p className="text-[10px] text-slate-400">Logistics Hub Dispatch Verification</p>
+              </div>
+            </div>
+            
+            {/* Viewport Frame */}
+            <div className="relative w-full aspect-square max-w-[240px] mx-auto bg-black/60 rounded-2xl border border-slate-700 overflow-hidden mb-6 flex flex-col items-center justify-center">
+              <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-indigo-500"></div>
+              <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-500"></div>
+              <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-indigo-500"></div>
+              <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-indigo-500"></div>
+              
+              {/* Glowing Scan Laser Line */}
+              <div className="absolute left-0 right-0 h-[2px] bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)] animate-[scan_2s_infinite_ease-in-out]"></div>
+              
+              <div className="flex flex-col items-center space-y-2 opacity-60">
+                <Camera size={40} className="text-slate-500 animate-pulse" />
+                <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">SCANNING VIEWPORT</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleQRScanSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Select Active Cargo barcode to Scan</label>
+                <select
+                  value={scannedTrackingId}
+                  onChange={(e) => setScannedTrackingId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition border-indigo-500/20"
+                  required
+                >
+                  <option value="">-- Choose Consignment --</option>
+                  {activeDeliveries.map((s) => (
+                    <option key={s.id} value={s.trackingId}>
+                      {s.trackingId} ({s.originCity} ➜ {s.destinationCity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes scan {
+                  0%, 100% { top: 10%; }
+                  50% { top: 90%; }
+                }
+              `}} />
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setQrModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-[0_0_15px_rgba(79,70,229,0.4)]"
+                >
+                  Simulate Laser Scan
                 </button>
               </div>
             </form>

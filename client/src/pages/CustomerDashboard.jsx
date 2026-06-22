@@ -8,7 +8,7 @@ import {
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
   BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
-  BarChart2, Coins
+  BarChart2, Coins, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,6 +19,57 @@ const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'
 const CustomerDashboard = () => {
   const { logout, user } = useAuth();
   const socket = useSocket();
+
+  const [lang, setLang] = useState('en');
+  const t = (key) => {
+    const dict = {
+      en: {
+        totalBookings: 'Booked Orders',
+        transitTracker: 'In Transit',
+        spendLeaderboard: 'Spend Ledger Analysis',
+        recentHistory: 'Recent Timeline History',
+        activeAlerts: 'Active Alerts & Feeds',
+        welcomeBack: 'Welcome back',
+        bookShipment: 'Book Shipment',
+        billingStatements: 'Billing Statements',
+        transitMap: 'Transit Map Tracker',
+        supportTickets: 'Support Tickets',
+        warehouseRates: 'Logistics Tariff Calculator',
+        myConsignments: 'My Consignments',
+        spendLogistics: 'Spend & Logistics Charts',
+        bookNewShipment: 'Book New Shipment',
+        rateCalculator: 'Rate Calculator',
+        shippingTariff: 'Shipping Tariff Rates',
+        supportDeskChat: 'Support Desk Chat',
+        billingInvoices: 'Billing Invoices',
+        savedAddresses: 'Saved Addresses',
+        notificationFeed: 'Notification Feed'
+      },
+      hi: {
+        totalBookings: 'कुल बुकिंग',
+        transitTracker: 'पारगमन में',
+        spendLeaderboard: 'व्यय खाता विश्लेषण',
+        recentHistory: 'हालिया इतिहास',
+        activeAlerts: 'सक्रिय सूचनाएं',
+        welcomeBack: 'आपका स्वागत है',
+        bookShipment: 'शिपमेंट बुक करें',
+        billingStatements: 'बिलिंग विवरण',
+        transitMap: 'पारगमन मानचित्र ट्रैकर',
+        supportTickets: 'सहायता टिकट',
+        warehouseRates: 'लॉजिस्टिक्स टैरिफ कैलकुलेटर',
+        myConsignments: 'मेरी खेप (पार्सल)',
+        spendLogistics: 'व्यय और चार्ट',
+        bookNewShipment: 'नया पार्सल बुक करें',
+        rateCalculator: 'मूल्य कैलकुलेटर',
+        shippingTariff: 'शिपिंग दर तालिका',
+        supportDeskChat: 'सहायता चैट डेस्क',
+        billingInvoices: 'बिलिंग इनवॉइस',
+        savedAddresses: 'बचाए गए पते',
+        notificationFeed: 'सूचना फ़ीड'
+      }
+    };
+    return dict[lang][key] || key;
+  };
 
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'book' | 'calculator' | 'tickets' | 'invoices' | 'address' | 'alerts' | 'rates'
   const [stats, setStats] = useState(null);
@@ -595,7 +646,7 @@ const CustomerDashboard = () => {
   const handlePayment = async (shipment) => {
     setPaymentLoading(true);
     try {
-      const orderRes = await axios.post('/payments/order', { shipmentId: shipment._id });
+      const orderRes = await axios.post('/payments/order', { shipmentId: shipment.id });
       const { order, keyId, amount, isMock } = orderRes.data;
 
       if (isMock) {
@@ -603,7 +654,7 @@ const CustomerDashboard = () => {
         setTimeout(async () => {
           try {
             const verifyRes = await axios.post('/payments/verify', {
-              shipmentId: shipment._id,
+              shipmentId: shipment.id,
               razorpay_order_id: order.id,
               isMock: true
             });
@@ -644,7 +695,7 @@ const CustomerDashboard = () => {
           toast.loading('Verifying Payment Signature...', { id: 'verify' });
           try {
             const verifyRes = await axios.post('/payments/verify', {
-              shipmentId: shipment._id,
+              shipmentId: shipment.id,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
@@ -709,29 +760,40 @@ const CustomerDashboard = () => {
         <div className="space-y-6">
           
           {/* Logo */}
-          <div className="flex items-center space-x-3 px-2 py-3 border-b border-slate-100">
-            <div className="bg-indigo-600 p-2 text-white rounded-xl">
-              <Package size={20} />
+          <div className="flex items-center justify-between px-2 py-3 border-b border-slate-100">
+            <div className="flex items-center space-x-3">
+              <div className="bg-indigo-600 p-2 text-white rounded-xl">
+                <Package size={20} />
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
+                <span className="text-[10px] text-slate-400 block font-bold tracking-widest uppercase">Customer portal</span>
+              </div>
             </div>
-            <div>
-              <span className="font-extrabold text-slate-800 text-lg leading-none">Marine Bytes</span>
-              <span className="text-[10px] text-slate-400 block font-bold tracking-widest uppercase">Customer portal</span>
-            </div>
+            {/* Language Toggle */}
+            <button
+              onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
+              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition flex items-center space-x-1"
+              title="Toggle Language"
+            >
+              <Globe size={13} />
+              <span className="uppercase text-[9px] font-extrabold">{lang}</span>
+            </button>
           </div>
 
           {/* Navigation Links */}
           <nav className="space-y-1">
             {[
-              { id: 'orders', label: 'My Consignments', icon: Compass },
-              { id: 'analytics', label: 'Spend & Logistics Charts', icon: BarChart2 },
-              { id: 'book', label: 'Book New Shipment', icon: PlusCircle },
-              { id: 'calculator', label: 'Rate Calculator', icon: Calculator },
-              { id: 'rates', label: 'Shipping Tariff Rates', icon: Coins },
-              { id: 'chat', label: 'Support Desk Chat', icon: MessageSquare },
-              { id: 'tickets', label: 'Support Tickets', icon: HelpCircle },
-              { id: 'invoices', label: 'Billing Invoices', icon: FileText },
-              { id: 'address', label: 'Saved Addresses', icon: BookOpen },
-              { id: 'alerts', label: 'Notification Feed', icon: Bell }
+              { id: 'orders', label: t('myConsignments'), icon: Compass },
+              { id: 'analytics', label: t('spendLogistics'), icon: BarChart2 },
+              { id: 'book', label: t('bookNewShipment'), icon: PlusCircle },
+              { id: 'calculator', label: t('rateCalculator'), icon: Calculator },
+              { id: 'rates', label: t('shippingTariff'), icon: Coins },
+              { id: 'chat', label: t('supportDeskChat'), icon: MessageSquare },
+              { id: 'tickets', label: t('supportTickets'), icon: HelpCircle },
+              { id: 'invoices', label: t('billingInvoices'), icon: FileText },
+              { id: 'address', label: t('savedAddresses'), icon: BookOpen },
+              { id: 'alerts', label: t('notificationFeed'), icon: Bell }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -857,7 +919,7 @@ const CustomerDashboard = () => {
                           </tr>
                         ) : (
                           shipments.map((shipment) => (
-                            <tr key={shipment._id} className="hover:bg-slate-50/30 transition">
+                            <tr key={shipment.id} className="hover:bg-slate-50/30 transition">
                               <td className="py-3.5 font-bold text-slate-800">{shipment.trackingId}</td>
                               <td className="py-3.5">{shipment.originCity} → {shipment.destinationCity}</td>
                               <td className="py-3.5 font-semibold text-indigo-600">{shipment.estimatedDeliveryDays ? `${shipment.estimatedDeliveryDays} days` : 'N/A'}</td>
@@ -1253,7 +1315,7 @@ const CustomerDashboard = () => {
                       <p className="text-xs text-slate-400 italic text-center py-6">No support tickets submitted.</p>
                     ) : (
                       tickets.map(t => (
-                        <div key={t._id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                        <div key={t.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase">{t.category}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${t.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{t.status}</span>
@@ -1300,11 +1362,11 @@ const CustomerDashboard = () => {
                         </tr>
                       ) : (
                         invoices.map((invoice) => (
-                          <tr key={invoice._id} className="hover:bg-slate-50/40 transition">
+                          <tr key={invoice.id} className="hover:bg-slate-50/40 transition">
                             <td className="py-3.5 font-bold text-slate-800">{invoice.invoiceNumber}</td>
                             <td className="py-3.5 text-slate-400">{new Date(invoice.createdAt).toLocaleDateString()}</td>
                             <td className="py-3.5 text-slate-500 font-mono text-[10px]">{invoice.paymentId}</td>
-                            <td className="py-3.5 font-bold text-emerald-600">₹{invoice.amount.toFixed(2)}</td>
+                            <td className="py-3.5 font-bold text-emerald-600">₹{Number(invoice.amount || 0).toFixed(2)}</td>
                             <td className="py-3.5 text-right">
                               <button
                                 onClick={() => handleDownloadInvoice(invoice.invoiceNumber)}
@@ -1366,8 +1428,8 @@ const CustomerDashboard = () => {
                       <p className="text-xs text-slate-400 italic py-6 col-span-2 text-center">No saved addresses.</p>
                     ) : (
                       addresses.map(a => (
-                        <div key={a._id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl relative space-y-2">
-                          <button onClick={() => handleDeleteAddress(a._id)} className="absolute top-3 right-3 p-1.5 bg-white border border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition">
+                        <div key={a.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl relative space-y-2">
+                          <button onClick={() => handleDeleteAddress(a.id)} className="absolute top-3 right-3 p-1.5 bg-white border border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition">
                             <Trash2 size={12} />
                           </button>
                           <h4 className="text-xs font-bold text-slate-800 pr-6">{a.name}</h4>
@@ -1392,7 +1454,7 @@ const CustomerDashboard = () => {
                     <p className="text-xs text-slate-400 italic text-center py-6">No recent notification alerts.</p>
                   ) : (
                     notifications.map(n => (
-                      <div key={n._id} className="py-3.5 flex items-start space-x-3 hover:bg-slate-50/20 transition px-2 rounded-lg">
+                      <div key={n.id} className="py-3.5 flex items-start space-x-3 hover:bg-slate-50/20 transition px-2 rounded-lg">
                         <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mt-0.5">
                           <Bell size={14} />
                         </div>
@@ -1495,7 +1557,7 @@ const CustomerDashboard = () => {
                     chatMessages.map((msg, idx) => {
                       const isMe = msg.senderId === user.id;
                       return (
-                        <div key={msg._id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-xs md:max-w-md rounded-2xl p-3.5 shadow-sm text-xs ${
                             isMe 
                               ? 'bg-indigo-600 text-white rounded-tr-none' 
@@ -1575,6 +1637,20 @@ const CustomerDashboard = () => {
                     </div>
                   ))}
                 </div>
+
+                {trackedShipment.status === 'Delivered' && trackedShipment.signature && (
+                  <div className="mt-6 pt-5 border-t border-slate-100 animate-fade-in">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">Captured Proof of Delivery</p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center">
+                      <img 
+                        src={trackedShipment.signature} 
+                        alt="Proof of Delivery Signature" 
+                        className="max-h-[80px] w-auto border-b border-dashed border-slate-300 pb-2 mb-2 select-none" 
+                      />
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Customer Signature Receipt</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

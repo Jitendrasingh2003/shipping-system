@@ -10,6 +10,7 @@ import AdminLoginPage from './pages/AdminLoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import StaffDashboard from './pages/StaffDashboard';
 import CustomerDashboard from './pages/CustomerDashboard';
+import WelcomePage from './pages/WelcomePage';
 
 function App() {
   return (
@@ -32,7 +33,8 @@ function App() {
             }}
           />
           <Routes>
-            {/* Public Portal & Login Selector */}
+            {/* Public Welcome Website & Portals */}
+            <Route path="/welcome" element={<WelcomePage />} />
             <Route path="/" element={<PortalSelectPage />} />
             <Route path="/admin-login" element={<AdminLoginPage />} />
 

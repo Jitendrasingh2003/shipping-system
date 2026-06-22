@@ -1,16 +1,63 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Truck, User, Key, Lock, Mail, Phone, Loader2, MapPin, Clock, Coins } from 'lucide-react';
+import { Shield, Truck, User, Key, Lock, Mail, Phone, Loader2, MapPin, Clock, Coins, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const PortalSelectPage = () => {
   const navigate = useNavigate();
   const { login, register, token, user } = useAuth();
   
+  const [lang, setLang] = useState('en');
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [selectedRole, setSelectedRole] = useState('customer'); // 'customer' | 'staff' | 'admin'
   
+  const t = (key) => {
+    const dict = {
+      en: {
+        pitchTitle: 'Smart Logistics Simplified',
+        pitchDesc: 'Calculate estimated delivery times instantly, track shipments over Socket.io, and confirm orders with seamless Razorpay checkout.',
+        signIn: 'Sign In',
+        createAccount: 'Create Account',
+        staffHub: 'Staff Hub',
+        staffDesc: 'Authorized Operator Credentials Entry Only',
+        fullName: 'Full Name',
+        emailAddress: 'Email Address',
+        phoneNum: 'Phone Number (Optional)',
+        password: 'Password',
+        newCustomer: 'New customer? ',
+        alreadyAcc: 'Already have an account? ',
+        createAccBtn: 'Create an account',
+        signInHere: 'Sign In here',
+        visitWebsite: 'Visit Company Website',
+        placeholderName: 'Enter your name',
+        placeholderEmail: 'Enter email address',
+        placeholderPhone: 'Enter phone number'
+      },
+      hi: {
+        pitchTitle: 'स्मार्ट लॉजिस्टिक्स अब आसान',
+        pitchDesc: 'डिलीवरी समय का तुरंत अनुमान लगाएं, सॉकेट द्वारा शिपमेंट ट्रैक करें, और आसान रेज़रपे पेमेंट से बुकिंग कन्फर्म करें।',
+        signIn: 'साइन इन करें',
+        createAccount: 'अकाउंट बनाएं',
+        staffHub: 'स्टाफ हब',
+        staffDesc: 'केवल अधिकृत स्टाफ ऑपरेटर के लिए लॉगिन',
+        fullName: 'पूरा नाम',
+        emailAddress: 'ईमेल पता',
+        phoneNum: 'फ़ोन नंबर (वैकल्पिक)',
+        password: 'पासवर्ड',
+        newCustomer: 'नए ग्राहक? ',
+        alreadyAcc: 'पहले से ही खाता है? ',
+        createAccBtn: 'अकाउंट बनाएं',
+        signInHere: 'यहाँ साइन इन करें',
+        visitWebsite: 'कंपनी की वेबसाइट पर जाएं',
+        placeholderName: 'अपना नाम दर्ज करें',
+        placeholderEmail: 'ईमेल पता दर्ज करें',
+        placeholderPhone: 'फ़ोन नंबर दर्ज करें'
+      }
+    };
+    return dict[lang][key] || key;
+  };
+
   const [email, setEmail] = useState('customer1@shiptrack.com');
   const [password, setPassword] = useState('Customer@123');
   const [name, setName] = useState('');
@@ -77,6 +124,17 @@ const PortalSelectPage = () => {
       className="relative min-h-screen flex items-center justify-center p-6 overflow-hidden font-sans text-slate-100"
       style={{ backgroundColor: '#080b11' }}
     >
+      {/* Floating Language Switcher */}
+      <div className="absolute top-4 right-4 z-50">
+        <button
+          type="button"
+          onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
+          className="px-3.5 py-1.5 bg-slate-900/80 hover:bg-slate-850 border border-slate-800 rounded-xl text-xs font-bold text-indigo-400 hover:text-indigo-300 transition shadow-md flex items-center space-x-1.5"
+        >
+          <Globe size={12} className="animate-spin-slow" />
+          <span>{lang === 'en' ? 'हिन्दी (HI)' : 'English (EN)'}</span>
+        </button>
+      </div>
       {/* Background Video Loop (Real cargo ship at sea) */}
       <video
         autoPlay
@@ -137,14 +195,15 @@ const PortalSelectPage = () => {
           
           <div className="space-y-3">
             <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white leading-[1.15]">
-              Smart Logistics <br />
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                Simplified
-              </span>
+              {lang === 'en' ? (
+                <>Smart Logistics <br /><span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">Simplified</span></>
+              ) : (
+                <>स्मार्ट लॉजिस्टिक्स <br /><span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">अब आसान</span></>
+              )}
             </h1>
             
             <p className="text-slate-300 text-sm leading-relaxed">
-              Calculate estimated delivery times instantly, track shipments over Socket.io, and confirm orders with seamless Razorpay checkout.
+              {t('pitchDesc')}
             </p>
           </div>
 
@@ -225,28 +284,37 @@ const PortalSelectPage = () => {
           >
             
             {/* Tabs */}
-            <div className="flex border-b border-slate-800 mb-8">
-              <button
-                onClick={() => { setActiveTab('login'); }}
-                className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
-                  activeTab === 'login' 
-                    ? 'text-indigo-400 border-indigo-500' 
-                    : 'text-slate-400 border-transparent hover:text-slate-300'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setActiveTab('register'); setSelectedRole('customer'); }}
-                className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
-                  activeTab === 'register' 
-                    ? 'text-indigo-400 border-indigo-500' 
-                    : 'text-slate-400 border-transparent hover:text-slate-300'
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
+            {selectedRole === 'customer' ? (
+              <div className="flex border-b border-slate-800 mb-8">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('login'); }}
+                  className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
+                    activeTab === 'login' 
+                      ? 'text-indigo-400 border-indigo-500' 
+                      : 'text-slate-400 border-transparent hover:text-slate-300'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('register'); }}
+                  className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
+                    activeTab === 'register' 
+                      ? 'text-indigo-400 border-indigo-500' 
+                      : 'text-slate-400 border-transparent hover:text-slate-300'
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
+            ) : (
+              <div className="mb-6 border-b border-slate-800/60 pb-4">
+                <h2 className="text-lg font-black text-white tracking-tight">Staff Hub</h2>
+                <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Authorized Operator Credentials Entry Only</p>
+              </div>
+            )}
 
             {/* Role Header (only for Login) */}
             {activeTab === 'login' && (
@@ -290,13 +358,13 @@ const PortalSelectPage = () => {
               {activeTab === 'register' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Full Name
+                    {t('fullName')}
                   </label>
                   <div className="relative">
                     <User className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'name' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
                     <input
                       type="text"
-                      placeholder="Enter your name"
+                      placeholder={t('placeholderName')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       onFocus={() => setActiveFocus('name')}
@@ -310,13 +378,13 @@ const PortalSelectPage = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Email Address
+                  {t('emailAddress')}
                 </label>
                 <div className="relative">
                   <Mail className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'email' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
                   <input
                     type="email"
-                    placeholder="Enter email address"
+                    placeholder={t('placeholderEmail')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => setActiveFocus('email')}
@@ -330,13 +398,13 @@ const PortalSelectPage = () => {
               {activeTab === 'register' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Phone Number (Optional)
+                    {t('phoneNum')}
                   </label>
                   <div className="relative">
                     <Phone className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'phone' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
                     <input
                       type="tel"
-                      placeholder="Enter phone number"
+                      placeholder={t('placeholderPhone')}
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       onFocus={() => setActiveFocus('phone')}
@@ -349,7 +417,7 @@ const PortalSelectPage = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Password
+                  {t('password')}
                 </label>
                 <div className="relative">
                   <Lock className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'password' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
@@ -376,10 +444,51 @@ const PortalSelectPage = () => {
                 ) : (
                   <>
                     <Key size={16} />
-                    <span>{activeTab === 'login' ? `Login as ${selectedRole.toUpperCase()}` : 'Register'}</span>
+                    <span>{activeTab === 'login' ? `${t('signIn')} (${selectedRole.toUpperCase()})` : t('createAccount')}</span>
                   </>
                 )}
               </button>
+
+              {/* Quick Tab Toggle Link */}
+              {selectedRole === 'customer' && (
+                <div className="text-center pt-2">
+                  {activeTab === 'login' ? (
+                    <div>
+                      <span className="text-xs text-slate-400">New customer? </span>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('register'); setSelectedRole('customer'); }}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition underline"
+                      >
+                        Create an account
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-xs text-slate-400">Already have an account? </span>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('login'); }}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition underline"
+                      >
+                        Sign In here
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Visit Website Button */}
+              <div className="border-t border-slate-800/60 mt-5 pt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => navigate('/welcome')}
+                  className="w-full py-2.5 px-4 bg-slate-900/60 hover:bg-slate-850/80 border border-slate-800 hover:border-slate-700 text-indigo-400 hover:text-indigo-300 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-sm"
+                >
+                  <Globe size={14} className="animate-pulse" />
+                  <span>Visit Company Website</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>

@@ -1,4 +1,4 @@
-const ChatMessage = require('../models/ChatMessage');
+const { getMySQLPool } = require('../config/db.mysql');
 
 const getActiveChats = async (req, res, next) => {
   try {
@@ -6,22 +6,21 @@ const getActiveChats = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Unauthorized access.' });
     }
 
-    // Get unique active rooms grouped by roomId
-    const activeRooms = await ChatMessage.aggregate([
-      { $sort: { createdAt: -1 } },
-      {
-        $group: {
-          _id: '$roomId',
-          lastMessage: { $first: '$message' },
-          senderName: { $first: '$senderName' },
-          senderRole: { $first: '$senderRole' },
-          updatedAt: { $first: '$createdAt' }
-        }
-      },
-      { $sort: { updatedAt: -1 } }
-    ]);
+    const pool = getMySQLPool();
+    // Get unique rooms with their latest message
+    const [rows] = await pool.query(`
+      SELECT 
+        room_id AS _id,
+        SUBSTRING_INDEX(GROUP_CONCAT(message ORDER BY created_at DESC SEPARATOR '|||'), '|||', 1) AS lastMessage,
+        SUBSTRING_INDEX(GROUP_CONCAT(sender_name ORDER BY created_at DESC SEPARATOR '|||'), '|||', 1) AS senderName,
+        SUBSTRING_INDEX(GROUP_CONCAT(sender_role ORDER BY created_at DESC SEPARATOR '|||'), '|||', 1) AS senderRole,
+        MAX(created_at) AS updatedAt
+      FROM chat_messages
+      GROUP BY room_id
+      ORDER BY updatedAt DESC
+    `);
 
-    res.status(200).json({ success: true, chats: activeRooms });
+    res.status(200).json({ success: true, chats: rows });
   } catch (error) {
     next(error);
   }
@@ -30,12 +29,24 @@ const getActiveChats = async (req, res, next) => {
 const getChatHistory = async (req, res, next) => {
   const { roomId } = req.params;
   try {
-    // Validate ownership: Customers can only fetch their own chat history
     if (req.user.role === 'customer' && roomId !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Unauthorized access.' });
     }
 
-    const messages = await ChatMessage.find({ roomId }).sort({ createdAt: 1 });
+    const pool = getMySQLPool();
+    const [rows] = await pool.query(
+      'SELECT * FROM chat_messages WHERE room_id = ? ORDER BY created_at ASC',
+      [roomId]
+    );
+    const messages = rows.map(r => ({
+      id: r.id,
+      roomId: r.room_id,
+      senderId: r.sender_id,
+      senderName: r.sender_name,
+      senderRole: r.sender_role,
+      message: r.message,
+      createdAt: r.created_at
+    }));
     res.status(200).json({ success: true, messages });
   } catch (error) {
     next(error);

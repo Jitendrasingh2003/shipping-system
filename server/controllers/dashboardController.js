@@ -1,88 +1,67 @@
-const Shipment = require('../models/Shipment');
-const Invoice = require('../models/Invoice');
-const UserMongo = require('../models/User.mongo');
-const { getMySQLPool, checkMySQLActive } = require('../config/db.mysql');
+const { getMySQLPool } = require('../config/db.mysql');
 
 const getDashboardStats = async (req, res, next) => {
   const { role, id: userId } = req.user;
+  const pool = getMySQLPool();
 
   try {
     if (role === 'admin') {
-      // 1. Admin Stats
-      const totalShipmentsCount = await Shipment.countDocuments();
-      const statusBreakdown = await Shipment.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]);
-      
-      const typeBreakdown = await Shipment.aggregate([
-        { $group: { _id: '$shipmentType', count: { $sum: 1 } } }
-      ]);
+      // Total shipments
+      const [[{ totalShipments }]] = await pool.query('SELECT COUNT(*) AS totalShipments FROM shipments');
 
-      const totalRevenueResult = await Invoice.aggregate([
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0;
+      // Status breakdown
+      const [statusRows] = await pool.query('SELECT status, COUNT(*) AS count FROM shipments GROUP BY status');
+      const statusBreakdown = {};
+      statusRows.forEach(r => { statusBreakdown[r.status] = r.count; });
 
-      // User registrations counts
-      let totalUsersCount = 0;
-      let rolesDistribution = { admin: 0, staff: 0, customer: 0 };
+      // Type breakdown
+      const [typeRows] = await pool.query('SELECT shipment_type AS type, COUNT(*) AS count FROM shipments GROUP BY shipment_type');
+      const typeBreakdown = {};
+      typeRows.forEach(r => { typeBreakdown[r.type] = r.count; });
 
-      if (checkMySQLActive()) {
-        const mysqlPool = getMySQLPool();
-        const [rows] = await mysqlPool.query(
-          "SELECT role, COUNT(*) as count FROM users GROUP BY role"
-        );
-        rows.forEach(r => {
-          rolesDistribution[r.role] = parseInt(r.count);
-          totalUsersCount += parseInt(r.count);
-        });
-      } else {
-        const usersGrouped = await UserMongo.aggregate([
-          { $group: { _id: '$role', count: { $sum: 1 } } }
-        ]);
-        usersGrouped.forEach(ug => {
-          rolesDistribution[ug._id] = ug.count;
-          totalUsersCount += ug.count;
-        });
-      }
+      // Total revenue
+      const [[{ totalRevenue }]] = await pool.query('SELECT COALESCE(SUM(amount), 0) AS totalRevenue FROM invoices');
+
+      // Users breakdown
+      const [userRows] = await pool.query('SELECT role, COUNT(*) AS count FROM users GROUP BY role');
+      const rolesDistribution = { admin: 0, staff: 0, customer: 0 };
+      let totalUsers = 0;
+      userRows.forEach(r => {
+        rolesDistribution[r.role] = parseInt(r.count);
+        totalUsers += parseInt(r.count);
+      });
 
       // Recent shipments
-      const recentShipments = await Shipment.find().sort({ createdAt: -1 }).limit(5);
+      const [recentRows] = await pool.query('SELECT * FROM shipments ORDER BY created_at DESC LIMIT 5');
+      const recentShipments = recentRows.map(rowToShipment);
 
       res.status(200).json({
         success: true,
         stats: {
-          totalShipments: totalShipmentsCount,
-          totalRevenue,
-          totalUsers: totalUsersCount,
+          totalShipments,
+          totalRevenue: parseFloat(totalRevenue),
+          totalUsers,
           usersBreakdown: rolesDistribution,
-          statusBreakdown: statusBreakdown.reduce((acc, curr) => {
-            acc[curr._id] = curr.count;
-            return acc;
-          }, {}),
-          typeBreakdown: typeBreakdown.reduce((acc, curr) => {
-            acc[curr._id] = curr.count;
-            return acc;
-          }, {}),
+          statusBreakdown,
+          typeBreakdown,
           recentShipments
         }
       });
 
     } else if (role === 'staff') {
-      // 2. Staff Stats
-      const totalAssigned = await Shipment.countDocuments({ assignedStaffId: userId });
-      const pendingAssigned = await Shipment.countDocuments({ 
-        assignedStaffId: userId, 
-        status: { $in: ['Booked', 'Picked up', 'In Transit', 'Out for Delivery'] } 
-      });
-      const completedAssigned = await Shipment.countDocuments({ 
-        assignedStaffId: userId, 
-        status: 'Delivered' 
-      });
-
-      const recentTasks = await Shipment.find({ assignedStaffId: userId })
-        .sort({ updatedAt: -1 })
-        .limit(5);
+      const [[{ totalAssigned }]] = await pool.query(
+        'SELECT COUNT(*) AS totalAssigned FROM shipments WHERE assigned_staff_id = ?', [userId]
+      );
+      const [[{ pendingAssigned }]] = await pool.query(
+        `SELECT COUNT(*) AS pendingAssigned FROM shipments 
+         WHERE assigned_staff_id = ? AND status IN ('Booked','Picked up','In Transit','Out for Delivery')`, [userId]
+      );
+      const [[{ completedAssigned }]] = await pool.query(
+        "SELECT COUNT(*) AS completedAssigned FROM shipments WHERE assigned_staff_id = ? AND status = 'Delivered'", [userId]
+      );
+      const [recentRows] = await pool.query(
+        'SELECT * FROM shipments WHERE assigned_staff_id = ? ORDER BY updated_at DESC LIMIT 5', [userId]
+      );
 
       res.status(200).json({
         success: true,
@@ -90,108 +69,73 @@ const getDashboardStats = async (req, res, next) => {
           totalAssigned,
           pendingAssigned,
           completedAssigned,
-          recentTasks
+          recentTasks: recentRows.map(rowToShipment)
         }
       });
 
     } else {
-      // 3. Customer Stats
-      const totalBooked = await Shipment.countDocuments({ senderId: userId });
-      const activeShipments = await Shipment.countDocuments({
-        senderId: userId,
-        status: { $in: ['Booked', 'Picked up', 'In Transit', 'Out for Delivery'] }
-      });
-      
-      const totalSpentResult = await Invoice.aggregate([
-        { $match: { userId } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]);
-      const totalSpent = totalSpentResult.length > 0 ? totalSpentResult[0].total : 0;
-
-      const recentShipments = await Shipment.find({ senderId: userId })
-        .sort({ createdAt: -1 })
-        .limit(5);
+      // Customer stats
+      const [[{ totalBooked }]] = await pool.query(
+        'SELECT COUNT(*) AS totalBooked FROM shipments WHERE sender_id = ?', [userId]
+      );
+      const [[{ activeShipments }]] = await pool.query(
+        `SELECT COUNT(*) AS activeShipments FROM shipments 
+         WHERE sender_id = ? AND status IN ('Booked','Picked up','In Transit','Out for Delivery')`, [userId]
+      );
+      const [[{ totalSpent }]] = await pool.query(
+        'SELECT COALESCE(SUM(amount), 0) AS totalSpent FROM invoices WHERE user_id = ?', [userId]
+      );
+      const [recentRows] = await pool.query(
+        'SELECT * FROM shipments WHERE sender_id = ? ORDER BY created_at DESC LIMIT 5', [userId]
+      );
 
       // Spend history last 6 months
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setDate(1); // Prevent month overflow bug
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-      sixMonthsAgo.setHours(0, 0, 0, 0);
-
-      const spendHistoryAgg = await Invoice.aggregate([
-        { 
-          $match: { 
-            userId,
-            createdAt: { $gte: sixMonthsAgo }
-          } 
-        },
-        {
-          $group: {
-            _id: { 
-              year: { $year: '$createdAt' }, 
-              month: { $month: '$createdAt' } 
-            },
-            total: { $sum: '$amount' }
-          }
-        }
-      ]);
+      const [spendRows] = await pool.query(`
+        SELECT YEAR(created_at) AS year, MONTH(created_at) AS month, SUM(amount) AS total
+        FROM invoices
+        WHERE user_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        GROUP BY YEAR(created_at), MONTH(created_at)
+      `, [userId]);
 
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const spendHistory = [];
       for (let i = 5; i >= 0; i--) {
         const d = new Date();
-        d.setDate(1); // Prevent month overflow bug
+        d.setDate(1);
         d.setMonth(d.getMonth() - i);
         const y = d.getFullYear();
         const m = d.getMonth() + 1;
-        const mName = monthNames[d.getMonth()];
-        
-        const found = spendHistoryAgg.find(item => item._id.year === y && item._id.month === m);
+        const found = spendRows.find(r => parseInt(r.year) === y && parseInt(r.month) === m);
         spendHistory.push({
-          month: `${mName} ${y.toString().slice(-2)}`,
-          amount: found ? found.total : 0
+          month: `${monthNames[d.getMonth()]} ${y.toString().slice(-2)}`,
+          amount: found ? parseFloat(found.total) : 0
         });
       }
 
       // Shipment type breakdown
-      const typeBreakdownAgg = await Shipment.aggregate([
-        { $match: { senderId: userId } },
-        { $group: { _id: '$shipmentType', count: { $sum: 1 } } }
-      ]);
+      const [typeRows] = await pool.query(
+        'SELECT shipment_type AS type, COUNT(*) AS count FROM shipments WHERE sender_id = ? GROUP BY shipment_type', [userId]
+      );
       const typeBreakdown = { Standard: 0, Express: 0, Air: 0, Ocean: 0 };
-      typeBreakdownAgg.forEach(item => {
-        if (typeBreakdown[item._id] !== undefined) {
-          typeBreakdown[item._id] = item.count;
-        }
-      });
+      typeRows.forEach(r => { if (typeBreakdown[r.type] !== undefined) typeBreakdown[r.type] = r.count; });
 
-      // Shipment status breakdown
-      const statusBreakdownAgg = await Shipment.aggregate([
-        { $match: { senderId: userId } },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]);
+      // Status breakdown
+      const [statusRows] = await pool.query(
+        'SELECT status, COUNT(*) AS count FROM shipments WHERE sender_id = ? GROUP BY status', [userId]
+      );
       const statusBreakdown = {
-        'Booked': 0,
-        'Picked up': 0,
-        'In Transit': 0,
-        'Out for Delivery': 0,
-        'Delivered': 0,
-        'Pending Payment': 0,
-        'Cancelled': 0
+        'Booked': 0, 'Picked up': 0, 'In Transit': 0,
+        'Out for Delivery': 0, 'Delivered': 0, 'Pending Payment': 0, 'Cancelled': 0
       };
-      statusBreakdownAgg.forEach(item => {
-        if (statusBreakdown[item._id] !== undefined) {
-          statusBreakdown[item._id] = item.count;
-        }
-      });
+      statusRows.forEach(r => { if (statusBreakdown[r.status] !== undefined) statusBreakdown[r.status] = r.count; });
 
       res.status(200).json({
         success: true,
         stats: {
           totalBooked,
           activeShipments,
-          totalSpent,
-          recentShipments,
+          totalSpent: parseFloat(totalSpent),
+          recentShipments: recentRows.map(rowToShipment),
           spendHistory,
           typeBreakdown,
           statusBreakdown
@@ -203,6 +147,29 @@ const getDashboardStats = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  getDashboardStats
-};
+// Shared row mapper
+const rowToShipment = (row) => ({
+  id: row.id,
+  trackingId: row.tracking_id,
+  senderId: row.sender_id,
+  senderName: row.sender_name,
+  recipientName: row.recipient_name,
+  recipientAddress: row.recipient_address,
+  originCity: row.origin_city,
+  destinationCity: row.destination_city,
+  weight: row.weight,
+  dimensions: { length: row.dim_length, width: row.dim_width, height: row.dim_height },
+  shipmentType: row.shipment_type,
+  status: row.status,
+  assignedStaffId: row.assigned_staff_id,
+  assignedStaffName: row.assigned_staff_name,
+  estimatedDeliveryDays: row.estimated_delivery_days,
+  paymentStatus: row.payment_status,
+  paymentId: row.payment_id,
+  history: row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : [],
+  signature: row.signature,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+});
+
+module.exports = { getDashboardStats };
