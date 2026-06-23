@@ -1093,15 +1093,33 @@ const CustomerDashboard = () => {
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-100 pt-4 grid grid-cols-3 gap-3">
-                      <input type="number" placeholder="L cm" value={length} onChange={(e) => setLength(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
-                      <input type="number" placeholder="W cm" value={width} onChange={(e) => setWidth(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
-                      <input type="number" placeholder="H cm" value={height} onChange={(e) => setHeight(parseInt(e.target.value) || 0)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center" required />
+                    <div className="border-t border-slate-100 pt-4">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">📦 Package Dimensions (cm)</label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[9px] font-semibold text-slate-400 mb-1 text-center">Length</label>
+                          <input type="number" placeholder="e.g. 30" value={length} onChange={(e) => setLength(parseInt(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-semibold text-slate-400 mb-1 text-center">Width</label>
+                          <input type="number" placeholder="e.g. 20" value={width} onChange={(e) => setWidth(parseInt(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-semibold text-slate-400 mb-1 text-center">Height</label>
+                          <input type="number" placeholder="e.g. 10" value={height} onChange={(e) => setHeight(parseInt(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="border-t border-slate-100 pt-4 space-y-3">
-                      <input type="text" placeholder="Recipient Name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs" required />
-                      <textarea placeholder="Delivery Address" rows="3" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs" required></textarea>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Recipient Name</label>
+                        <input type="text" placeholder="e.g. Rahul Sharma" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Delivery Address</label>
+                        <textarea placeholder="Full delivery address..." rows="3" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required></textarea>
+                      </div>
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-indigo-glow">Confirm Details & Pay</button>
