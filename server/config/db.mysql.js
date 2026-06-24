@@ -211,6 +211,85 @@ const initTables = async () => {
       }
     }
 
+    // Ensure sender_phone column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN sender_phone VARCHAR(50) DEFAULT NULL');
+      console.log('📝 MySQL: Added sender_phone column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for sender_phone:', err.message);
+      }
+    }
+
+    // Ensure item_description column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN item_description TEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added item_description column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for item_description:', err.message);
+      }
+    }
+
+    // Ensure is_metal column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN is_metal TINYINT(1) DEFAULT 0');
+      console.log('📝 MySQL: Added is_metal column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for is_metal:', err.message);
+      }
+    }
+
+    // Ensure origin_country column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN origin_country VARCHAR(255) DEFAULT "India"');
+      console.log('📝 MySQL: Added origin_country column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for origin_country:', err.message);
+      }
+    }
+
+    // Ensure destination_country column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN destination_country VARCHAR(255) DEFAULT "India"');
+      console.log('📝 MySQL: Added destination_country column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for destination_country:', err.message);
+      }
+    }
+
+    // Ensure govt_id_proof column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN govt_id_proof VARCHAR(255) DEFAULT NULL');
+      console.log('📝 MySQL: Added govt_id_proof column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+      }
+    }
+
+    // Ensure screenshot column exists in tickets table
+    try {
+      await connection.query('ALTER TABLE tickets ADD COLUMN screenshot LONGTEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added screenshot column to tickets table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter tickets table for screenshot:', err.message);
+      }
+    }
+
+    // Ensure sender_role column exists in tickets table
+    try {
+      await connection.query("ALTER TABLE tickets ADD COLUMN sender_role VARCHAR(50) DEFAULT 'customer'");
+      console.log('📝 MySQL: Added sender_role column to tickets table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter tickets table for sender_role:', err.message);
+      }
+    }
+
     console.log('🐬 MySQL: All tables checked/created successfully.');
     connection.release();
   } catch (error) {

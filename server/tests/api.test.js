@@ -35,6 +35,10 @@ describe('SmartShip End-to-End API Integration tests', () => {
   let authToken = '';
   let customerId = '';
   let shipmentId = '';
+  let staffToken = '';
+  let adminToken = '';
+  let customerTicketId = '';
+  let staffTicketId = '';
   const testEmail = `test_${Date.now()}@example.com`;
 
   test('POST /api/auth/register - Register Customer Account', async () => {
@@ -109,4 +113,130 @@ describe('SmartShip End-to-End API Integration tests', () => {
     
     shipmentId = res.body.shipment.id;
   });
+
+  test('POST /api/shipments/book - Book International Shipment with new fields', async () => {
+    const res = await request(app)
+      .post('/api/shipments/book')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        recipientName: 'International Recipient',
+        recipientAddress: '456 Broadway, New York, US',
+        originCountry: 'India',
+        originCity: 'Mumbai',
+        destinationCountry: 'United States',
+        destinationCity: 'New York',
+        weight: 12.0,
+        length: 30,
+        width: 30,
+        height: 25,
+        shipmentType: 'Air',
+        senderPhone: '+91 9999999999',
+        itemDescription: 'Industrial metal gears',
+        isMetal: true,
+        govtIdProof: 'A12345678'
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.shipment.originCountry).toBe('India');
+    expect(res.body.shipment.destinationCountry).toBe('United States');
+    expect(res.body.shipment.senderPhone).toBe('+91 9999999999');
+    expect(res.body.shipment.itemDescription).toBe('Industrial metal gears');
+    expect(res.body.shipment.isMetal).toBe(true);
+    expect(res.body.shipment.govtIdProof).toBe('A12345678');
+  });
+
+  test('POST /api/auth/register - Register Staff and Admin accounts for testing tickets', async () => {
+    // Staff
+    const staffRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        name: 'Test Staff',
+        email: `staff_${Date.now()}@example.com`,
+        password: 'Password123',
+        role: 'staff'
+      });
+    expect(staffRes.status).toBe(201);
+    staffToken = staffRes.body.token;
+
+    // Admin
+    const adminRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        name: 'Test Admin',
+        email: `admin_${Date.now()}@example.com`,
+        password: 'Password123',
+        role: 'admin'
+      });
+    expect(adminRes.status).toBe(201);
+    adminToken = adminRes.body.token;
+  });
+
+  test('POST /api/shipments/tickets - Customer submits a bug ticket with screenshot', async () => {
+    const res = await request(app)
+      .post('/api/shipments/tickets')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: 'Customer Dashboard Lag',
+        message: 'The page takes 5s to load',
+        category: 'Bug',
+        screenshot: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.ticket.id).toBeDefined();
+    expect(res.body.ticket.senderRole).toBe('customer');
+    expect(res.body.ticket.screenshot).toBeDefined();
+    customerTicketId = res.body.ticket.id;
+  });
+
+  test('POST /api/shipments/tickets - Staff submits a bug ticket', async () => {
+    const res = await request(app)
+      .post('/api/shipments/tickets')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        title: 'Scanner malfunctioning',
+        message: 'Cannot parse QR codes',
+        category: 'Bug',
+        screenshot: null
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.ticket.id).toBeDefined();
+    expect(res.body.ticket.senderRole).toBe('staff');
+    staffTicketId = res.body.ticket.id;
+  });
+
+  test('GET /api/shipments/tickets - Customer gets only their tickets', async () => {
+    const res = await request(app)
+      .get('/api/shipments/tickets')
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.tickets.length).toBeGreaterThanOrEqual(1);
+    // Customer should not see the staff ticket
+    const hasStaffTicket = res.body.tickets.some(t => t.id === staffTicketId);
+    expect(hasStaffTicket).toBe(false);
+  });
+
+  test('GET /api/shipments/tickets - Admin gets all tickets', async () => {
+    const res = await request(app)
+      .get('/api/shipments/tickets')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const hasCustomerTicket = res.body.tickets.some(t => t.id === customerTicketId);
+    const hasStaffTicket = res.body.tickets.some(t => t.id === staffTicketId);
+    expect(hasCustomerTicket).toBe(true);
+    expect(hasStaffTicket).toBe(true);
+  });
+
+  test('PUT /api/shipments/tickets/:ticketId/resolve - Admin resolves ticket', async () => {
+    const res = await request(app)
+      .put(`/api/shipments/tickets/${customerTicketId}/resolve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
 });
+

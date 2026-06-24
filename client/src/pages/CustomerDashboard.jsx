@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area
@@ -8,11 +9,18 @@ import {
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
   BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
-  BarChart2, Coins, Globe
+  BarChart2, Coins, Globe, Bug, Camera
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat'];
+const COUNTRIES_AND_CITIES = {
+  'India': ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat'],
+  'United States': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'San Francisco', 'Miami'],
+  'United Kingdom': ['London', 'Birmingham', 'Manchester', 'Glasgow', 'Liverpool'],
+  'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman'],
+  'Australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide']
+};
+const CITIES = COUNTRIES_AND_CITIES['India'];
 const SHIPMENT_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
 const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -90,13 +98,41 @@ const CustomerDashboard = () => {
   // Form Booking State
   const [recipientName, setRecipientName] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
-  const [originCity, setOriginCity] = useState(CITIES[0]);
-  const [destinationCity, setDestinationCity] = useState(CITIES[1]);
+  const [originCountry, setOriginCountry] = useState('India');
+  const [originCity, setOriginCity] = useState('Mumbai');
+  const [destinationCountry, setDestinationCountry] = useState('India');
+  const [destinationCity, setDestinationCity] = useState('Delhi');
   const [weight, setWeight] = useState(1.0);
   const [length, setLength] = useState(10);
   const [width, setWidth] = useState(10);
   const [height, setHeight] = useState(10);
   const [shipmentType, setShipmentType] = useState(SHIPMENT_TYPES[0]);
+  const [senderPhone, setSenderPhone] = useState(user?.phone || '');
+  const [itemDescription, setItemDescription] = useState('');
+  const [isMetal, setIsMetal] = useState(false);
+  const [govtIdProof, setGovtIdProof] = useState('');
+
+  useEffect(() => {
+    if (user && user.phone && !senderPhone) {
+      setSenderPhone(user.phone);
+    }
+  }, [user]);
+
+  const handleOriginCountryChange = (country) => {
+    setOriginCountry(country);
+    const cities = COUNTRIES_AND_CITIES[country] || [];
+    if (cities.length > 0) {
+      setOriginCity(cities[0]);
+    }
+  };
+
+  const handleDestinationCountryChange = (country) => {
+    setDestinationCountry(country);
+    const cities = COUNTRIES_AND_CITIES[country] || [];
+    if (cities.length > 0) {
+      setDestinationCity(cities[0]);
+    }
+  };
   
   // Real-time ETA estimation
   const [etaLoading, setEtaLoading] = useState(false);
@@ -156,6 +192,12 @@ const CustomerDashboard = () => {
   const [floatingLoading, setFloatingLoading] = useState(false);
   const floatingChatBottomRef = useRef(null);
   const mapRef = useRef(null);
+
+  // Floating Bug Report Bot State
+  const [floatingBugOpen, setFloatingBugOpen] = useState(false);
+  const [bugInput, setBugInput] = useState('');
+  const [bugScreenshot, setBugScreenshot] = useState(null);
+  const [bugLoading, setBugLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -230,7 +272,7 @@ const CustomerDashboard = () => {
 
   // Update Live ETA prediction on form changes
   const checkLiveEta = async () => {
-    if (!originCity || !destinationCity || originCity === destinationCity) {
+    if (!originCity || !destinationCity || (originCountry === destinationCountry && originCity === destinationCity)) {
       return setEstimatedEta(null);
     }
     
@@ -258,15 +300,17 @@ const CustomerDashboard = () => {
   };
 
   const handleGetAiRecommendation = async () => {
-    if (originCity === destinationCity) {
-      return toast.error('Origin and Destination cities must be different.');
+    if (originCountry === destinationCountry && originCity === destinationCity) {
+      return toast.error('Origin and Destination must be different.');
     }
 
     setRecommendationLoading(true);
     setAiRecommendation(null);
     try {
       const res = await axios.post('/shipments/recommend-route', {
+        originCountry,
         origin: originCity,
+        destinationCountry,
         destination: destinationCity,
         weight,
         urgency: recommenderUrgency
@@ -285,7 +329,7 @@ const CustomerDashboard = () => {
 
   useEffect(() => {
     checkLiveEta();
-  }, [originCity, destinationCity, weight, shipmentType]);
+  }, [originCountry, originCity, destinationCountry, destinationCity, weight, shipmentType]);
 
   // Leaflet Map Initialization and Update Loop
   useEffect(() => {
@@ -301,7 +345,27 @@ const CustomerDashboard = () => {
       'Pune': [18.5204, 73.8567],
       'Ahmedabad': [23.0225, 72.5714],
       'Jaipur': [26.9124, 75.7873],
-      'Surat': [21.1702, 72.8311]
+      'Surat': [21.1702, 72.8311],
+      'New York': [40.7128, -74.0060],
+      'Los Angeles': [34.0522, -118.2437],
+      'Chicago': [41.8781, -87.6298],
+      'Houston': [29.7604, -95.3698],
+      'San Francisco': [37.7749, -122.4194],
+      'Miami': [25.7617, -80.1918],
+      'London': [51.5074, -0.1278],
+      'Birmingham': [52.4862, -1.8904],
+      'Manchester': [53.4808, -2.2426],
+      'Glasgow': [55.8642, -4.2518],
+      'Liverpool': [53.4084, -2.9916],
+      'Dubai': [25.2048, 55.2708],
+      'Abu Dhabi': [24.4539, 54.3773],
+      'Sharjah': [25.3463, 55.4209],
+      'Ajman': [25.3995, 55.4796],
+      'Sydney': [-33.8688, 151.2093],
+      'Melbourne': [-37.8136, 144.9631],
+      'Brisbane': [-27.4705, 153.0260],
+      'Perth': [-31.9505, 115.8605],
+      'Adelaide': [-34.9285, 138.6007]
     };
 
     const originCoords = cityCoordinates[trackedShipment.originCity] || [20.5937, 78.9629];
@@ -470,6 +534,42 @@ const CustomerDashboard = () => {
     }
   };
 
+  const handleBugScreenshotChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBugScreenshot(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendBugReport = async (e) => {
+    e.preventDefault();
+    if (!bugInput.trim() || bugLoading) return;
+
+    setBugLoading(true);
+    try {
+      const res = await axios.post('/shipments/tickets', {
+        title: 'Bug Report via Widget',
+        message: bugInput.trim(),
+        category: 'Bug',
+        screenshot: bugScreenshot
+      });
+      if (res.data.success) {
+        toast.success('Bug report submitted successfully!');
+        setBugInput('');
+        setBugScreenshot(null);
+        setFloatingBugOpen(false);
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to submit bug report.');
+    } finally {
+      setBugLoading(false);
+    }
+  };
+
   // Rate Calculator Logic
   const handleCalculateRate = async (e) => {
     e.preventDefault();
@@ -611,21 +711,27 @@ const CustomerDashboard = () => {
 
   const handleBook = async (e) => {
     e.preventDefault();
-    if (originCity === destinationCity) {
-      return toast.error('Origin and Destination cities must be different.');
+    if (originCountry === destinationCountry && originCity === destinationCity) {
+      return toast.error('Origin and Destination must be different.');
     }
 
     try {
       const res = await axios.post('/shipments/book', {
         recipientName,
         recipientAddress,
+        originCountry,
         originCity,
+        destinationCountry,
         destinationCity,
         weight,
         length,
         width,
         height,
-        shipmentType
+        shipmentType,
+        senderPhone,
+        itemDescription,
+        isMetal,
+        govtIdProof
       });
 
       if (res.data.success) {
@@ -633,6 +739,9 @@ const CustomerDashboard = () => {
         setRecipientName('');
         setRecipientAddress('');
         setWeight(1.0);
+        setItemDescription('');
+        setIsMetal(false);
+        setGovtIdProof('');
         
         setPayingShipment(res.data.shipment);
         setActiveTab('orders');
@@ -1067,15 +1176,30 @@ const CustomerDashboard = () => {
                   <form onSubmit={handleBook} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Origin</label>
-                        <select value={originCity} onChange={(e) => setOriginCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
-                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Origin Country</label>
+                        <select value={originCountry} onChange={(e) => handleOriginCountryChange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Destination</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Destination Country</label>
+                        <select value={destinationCountry} onChange={(e) => handleDestinationCountryChange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Origin City</label>
+                        <select value={originCity} onChange={(e) => setOriginCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
+                          {(COUNTRIES_AND_CITIES[originCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Destination City</label>
                         <select value={destinationCity} onChange={(e) => setDestinationCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
-                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          {(COUNTRIES_AND_CITIES[destinationCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1112,6 +1236,46 @@ const CustomerDashboard = () => {
                     </div>
 
                     <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center space-x-1">
+                        <Package size={12} className="text-indigo-500" />
+                        <span>Content Details</span>
+                      </label>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-slate-400 mb-1">Item Description / Contents</label>
+                        <input type="text" placeholder="e.g. Cotton clothing, Documents, Metal keychains, etc." value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                      </div>
+                      <div className="flex items-center space-x-3 bg-slate-50/50 p-2.5 border border-slate-200/50 rounded-xl">
+                        <input type="checkbox" id="isMetal" checked={isMetal} onChange={(e) => setIsMetal(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" />
+                        <label htmlFor="isMetal" className="text-xs text-slate-700 font-semibold cursor-pointer select-none">
+                          Contains Metal Items (Subject to magnetic scanner clearance)
+                        </label>
+                      </div>
+                      {isMetal && (
+                        <div className="bg-amber-50/60 border border-amber-200 text-amber-800 p-3 rounded-xl text-[11px] leading-relaxed flex items-start space-x-2">
+                          <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Metal Item Alert:</strong> Shipment contains metal. It will undergo magnetic signature scan at security checkpoints. Delayed routing may occur if non-compliant with standard air cargo policies.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center space-x-1">
+                        <Clock size={12} className="text-indigo-500" />
+                        <span>Sender Information</span>
+                      </label>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-slate-400 mb-1">Sender Phone Number</label>
+                        <input type="text" placeholder="e.g. +91 9876543210" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center space-x-1">
+                        <MapPin size={12} className="text-indigo-500" />
+                        <span>Recipient Details</span>
+                      </label>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Recipient Name</label>
                         <input type="text" placeholder="e.g. Rahul Sharma" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
@@ -1121,6 +1285,38 @@ const CustomerDashboard = () => {
                         <textarea placeholder="Full delivery address..." rows="3" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required></textarea>
                       </div>
                     </div>
+
+                    {(originCountry !== 'India' || destinationCountry !== 'India') && (
+                      <div className="border-t border-slate-100 pt-4 space-y-3">
+                        <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl space-y-3">
+                          <h5 className="text-xs font-bold text-indigo-800 flex items-center space-x-1.5">
+                            <Globe size={14} className="text-indigo-600 animate-spin-slow" />
+                            <span>International KYC & Customs Conditions</span>
+                          </h5>
+                          <ul className="list-disc pl-4 text-[11px] text-indigo-700/90 space-y-1">
+                            <li><strong>KYC Compliance:</strong> A valid Passport or Government ID is required for customs verification.</li>
+                            <li><strong>Customs Duties:</strong> Consignments may be subject to local import taxes/duties at the destination country.</li>
+                            <li><strong>Commercial Invoice:</strong> An official declaration of item description and value must accompany the parcel.</li>
+                            <li><strong>Dangerous Goods:</strong> Liquids, aerosol cans, lithium batteries, and hazardous materials are strictly prohibited.</li>
+                          </ul>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1">
+                            <Shield size={12} className="text-indigo-500" />
+                            <span>Passport / Government ID Number</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            placeholder="Enter ID Number (e.g. Passport Number, SSN, National ID)" 
+                            value={govtIdProof} 
+                            onChange={(e) => setGovtIdProof(e.target.value)} 
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                            required 
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-indigo-glow">Confirm Details & Pay</button>
                   </form>
@@ -1163,7 +1359,11 @@ const CustomerDashboard = () => {
                           else if (shipmentType === 'Air') multiplier = rates.air_multiplier || 2.5;
                           else if (shipmentType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
                           
-                          const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier;
+                          let intlSurcharge = 1.0;
+                          if (originCountry !== 'India' || destinationCountry !== 'India') {
+                            intlSurcharge = 1.8; // 80% surcharge for international shipping
+                          }
+                          const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier * intlSurcharge;
                           const cost = costBeforeTax * (1 + (taxPercent / 100));
                           return Math.round(cost * 100) / 100;
                         })().toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -1676,11 +1876,84 @@ const CustomerDashboard = () => {
         </div>
       </main>
 
-      {/* Floating AI Chatbot Widget */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-        {/* Chat Panel */}
+      {/* Floating Widget Action Buttons Stack */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {/* Bug Report Panel */}
+        {floatingBugOpen && (
+          <div className="w-[340px] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-1 animate-fade-in">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-4 text-white flex items-center justify-between shadow-sm">
+              <div className="flex items-center space-x-2">
+                <Bug size={16} className="animate-pulse" />
+                <span className="font-extrabold text-xs tracking-wider uppercase">Report System Bug</span>
+              </div>
+              <button 
+                onClick={() => setFloatingBugOpen(false)}
+                className="text-white hover:text-red-200 text-sm font-bold bg-white/10 rounded-full h-6 w-6 flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSendBugReport} className="p-4 space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">What went wrong?</label>
+                <textarea
+                  value={bugInput}
+                  onChange={(e) => setBugInput(e.target.value)}
+                  placeholder="Describe the bug/problem here..."
+                  rows="3"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-red-500 transition"
+                  required
+                />
+              </div>
+
+              {/* Photo attachment field */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Attach Screenshot / Photo</label>
+                <div className="flex items-center space-x-3">
+                  <label className="flex-1 flex items-center justify-center space-x-2 py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 border-dashed rounded-xl cursor-pointer transition text-xs text-slate-500">
+                    <Camera size={14} className="text-slate-400" />
+                    <span>{bugScreenshot ? 'Change Photo' : 'Upload Image'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBugScreenshotChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {bugScreenshot && (
+                    <button
+                      type="button"
+                      onClick={() => setBugScreenshot(null)}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {bugScreenshot && (
+                  <div className="mt-2 relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50 p-1 flex justify-center">
+                    <img src={bugScreenshot} alt="Bug screenshot preview" className="max-h-[100px] object-contain rounded-md" />
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={bugLoading}
+                className="w-full py-2 bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-700 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50 flex items-center justify-center space-x-1"
+              >
+                {bugLoading ? 'Submitting...' : 'Send Bug Report'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* AI Chat Panel */}
         {floatingChatOpen && (
-          <div className="w-[340px] h-[450px] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-4 animate-fade-in">
+          <div className="w-[340px] h-[450px] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-1 animate-fade-in">
             {/* Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center space-x-2">
@@ -1743,23 +2016,46 @@ const CustomerDashboard = () => {
           </div>
         )}
 
-        {/* Floating Bubble Button */}
-        <button
-          onClick={() => setFloatingChatOpen(prev => !prev)}
-          className="h-14 w-14 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg hover:shadow-indigo-glow border border-indigo-400/20 hover:scale-105 active:scale-95 transition duration-150 relative"
-        >
-          {floatingChatOpen ? (
-            <span className="text-xl font-bold">✕</span>
-          ) : (
-            <span className="text-2xl animate-pulse">🤖</span>
-          )}
-          {!floatingChatOpen && (
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500 border-2 border-white"></span>
-            </span>
-          )}
-        </button>
+        {/* Buttons Row */}
+        <div className="flex space-x-3">
+          {/* Bug Trigger Button */}
+          <button
+            onClick={() => {
+              setFloatingBugOpen(prev => !prev);
+              setFloatingChatOpen(false);
+            }}
+            className="h-12 w-12 rounded-full bg-gradient-to-r from-red-600 to-orange-500 text-white flex items-center justify-center shadow-lg hover:shadow-red-glow border border-red-400/20 hover:scale-105 active:scale-95 transition duration-150 relative"
+            title="Report Bug"
+          >
+            {floatingBugOpen ? (
+              <span className="text-lg font-bold">✕</span>
+            ) : (
+              <Bug size={20} className="animate-pulse" />
+            )}
+          </button>
+
+          {/* AI Chatbot Trigger Button */}
+          <button
+            onClick={() => {
+              setFloatingChatOpen(prev => !prev);
+              setFloatingBugOpen(false);
+            }}
+            className="h-12 w-12 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg hover:shadow-indigo-glow border border-indigo-400/20 hover:scale-105 active:scale-95 transition duration-150 relative"
+            title="Ask AI"
+          >
+            {floatingChatOpen ? (
+              <span className="text-lg font-bold">✕</span>
+            ) : (
+              <span className="text-xl animate-pulse">🤖</span>
+            )}
+            {!floatingChatOpen && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500 border-2 border-white"></span>
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
     </div>

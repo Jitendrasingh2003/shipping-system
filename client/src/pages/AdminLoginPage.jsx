@@ -13,10 +13,10 @@ const AdminLoginPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [activeFocus, setActiveFocus] = useState(null); // 'email' | 'password' | null
 
-  // Auto-redirect if already logged in as Admin
+  // Auto-redirect only if already logged in as ADMIN
   useEffect(() => {
-    if (token && user) {
-      navigate(`/${user.role}`);
+    if (token && user && user.role === 'admin') {
+      navigate('/admin');
     }
   }, [token, user, navigate]);
 

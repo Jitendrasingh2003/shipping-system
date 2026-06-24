@@ -3,6 +3,54 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { getMySQLPool } = require('../config/db.mysql');
 
+// In-memory store for OTPs
+// Format: { [emailOrPhone]: { otp, expires } }
+const tempOtps = {};
+
+// Send OTP simulation
+const sendOtp = async (req, res, next) => {
+  const { email, phone, method } = req.body;
+
+  try {
+    if (!email || !phone || !method) {
+      return res.status(400).json({ success: false, message: 'Email, phone and method are required.' });
+    }
+
+    if (method !== 'email' && method !== 'sms') {
+      return res.status(400).json({ success: false, message: 'Invalid verification method.' });
+    }
+
+    // Generate random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiryTime = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    const key = method === 'email' ? email.toLowerCase() : phone;
+    tempOtps[key] = { otp, expires: expiryTime };
+
+    // Trigger simulation
+    const { sendSMSAlert, sendEmailAlert } = require('../utils/communication');
+    if (method === 'email') {
+      sendEmailAlert(
+        email.toLowerCase(),
+        'Marine Bytes Registration OTP',
+        `Dear Customer,\n\nYour 6-digit OTP code for registration is: ${otp}.\n\nThis OTP is valid for 5 minutes.`
+      );
+    } else {
+      sendSMSAlert(
+        phone,
+        `Your Marine Bytes registration verification code is: ${otp}. Valid for 5 minutes.`
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `OTP sent successfully to your registered ${method === 'email' ? 'email' : 'mobile number'}.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Helper: Generate Token
 const generateToken = (id, role) => {
   return jwt.sign(
@@ -14,11 +62,38 @@ const generateToken = (id, role) => {
 
 // Register User
 const register = async (req, res, next) => {
-  const { name, email, password, role = 'customer', phone = '' } = req.body;
+  const { name, email, password, role = 'customer', phone = '', otp } = req.body;
 
   try {
     const userRole = ['admin', 'staff', 'customer'].includes(role) ? role : 'customer';
     const pool = getMySQLPool();
+
+    // Verify OTP for customer registrations
+    if (userRole === 'customer' && process.env.NODE_ENV !== 'test') {
+      if (!otp) {
+        return res.status(400).json({ success: false, message: 'Verification OTP is required.' });
+      }
+
+      const emailKey = email.toLowerCase();
+      const phoneKey = phone;
+
+      let verified = false;
+
+      // Check email OTP
+      if (tempOtps[emailKey] && tempOtps[emailKey].otp === otp && tempOtps[emailKey].expires > Date.now()) {
+        delete tempOtps[emailKey];
+        verified = true;
+      }
+      // Check phone OTP
+      else if (tempOtps[phoneKey] && tempOtps[phoneKey].otp === otp && tempOtps[phoneKey].expires > Date.now()) {
+        delete tempOtps[phoneKey];
+        verified = true;
+      }
+
+      if (!verified) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired verification OTP.' });
+      }
+    }
 
     const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
     if (rows.length > 0) {
@@ -159,5 +234,6 @@ module.exports = {
   getAllStaff,
   getUserAddresses,
   createUserAddress,
-  deleteUserAddress
+  deleteUserAddress,
+  sendOtp
 };

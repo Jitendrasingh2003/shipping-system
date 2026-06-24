@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area
@@ -8,7 +9,7 @@ import {
 import { 
   BarChart3, Users, Package, CreditCard, LogOut, CheckCircle, Clock, Navigation, AlertCircle, RefreshCw,
   ShieldAlert, Settings, FileText, UserCheck, Activity, Search, Trash2, Heart, PlusCircle, Check,
-  Truck, MessageSquare, Send, Download, Layers, Map, Coins, Warehouse, Eye, Compass, Sun, Cloud, CloudLightning, Anchor,
+  Truck, MessageSquare, Send, Download, Layers, Map, Coins, Warehouse, Eye, EyeOff, Compass, Sun, Cloud, CloudLightning, Anchor,
   QrCode, Camera, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +18,8 @@ const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
 
 const AdminDashboard = () => {
   const { logout, user } = useAuth();
-  const { socket } = useSocket();
+  const socket = useSocket();
+
   const [lang, setLang] = useState('en');
   const t = (key) => {
     const dict = {
@@ -170,6 +172,10 @@ const AdminDashboard = () => {
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Support Tickets State
+  const [tickets, setTickets] = useState([]);
+  const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+
   // Shipment Actions State
   const [assignModal, setAssignModal] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
@@ -183,6 +189,7 @@ const AdminDashboard = () => {
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffPhone, setStaffPhone] = useState('');
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [registering, setRegistering] = useState(false);
 
   // Settings State
@@ -254,10 +261,28 @@ const AdminDashboard = () => {
         if (ratesRes.data.rates.base_fare) setBaseFare(ratesRes.data.rates.base_fare);
         if (ratesRes.data.rates.tax_rate) setTaxRate(ratesRes.data.rates.tax_rate);
       }
+
+      // Fetch Support & Bug Tickets
+      const ticketsRes = await axios.get('/shipments/tickets');
+      if (ticketsRes.data.success) {
+        setTickets(ticketsRes.data.tickets);
+      }
     } catch (err) {
       console.error('Failed to load logistics parameters:', err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResolveTicket = async (ticketId) => {
+    try {
+      const res = await axios.put(`/shipments/tickets/${ticketId}/resolve`);
+      if (res.data.success) {
+        toast.success('Ticket marked as resolved.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to resolve ticket.');
     }
   };
 
@@ -418,6 +443,7 @@ const AdminDashboard = () => {
         setStaffEmail('');
         setStaffPassword('');
         setStaffPhone('');
+        setShowStaffPassword(false);
         fetchData();
       }
     } catch (err) {
@@ -493,6 +519,7 @@ const AdminDashboard = () => {
               { id: 'users', label: 'Staff Directory', icon: UserCheck },
               { id: 'finance', label: 'Finance & Invoices', icon: FileText },
               { id: 'chats', label: 'Customer Support Chat', icon: MessageSquare },
+              { id: 'tickets', label: 'Support & Bug Tickets', icon: AlertCircle },
               { id: 'settings', label: 'Control Settings', icon: Settings }
             ].map(tab => {
               const Icon = tab.icon;
@@ -1043,14 +1070,23 @@ const AdminDashboard = () => {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={staffPassword}
-                    onChange={(e) => setStaffPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-                    placeholder="••••••••"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type={showStaffPassword ? 'text' : 'password'}
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3 pr-10 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                      placeholder="••••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffPassword(!showStaffPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-indigo-600 transition"
+                    >
+                      {showStaffPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Phone</label>
@@ -1641,6 +1677,94 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {/* TAB: SUPPORT & BUG TICKETS CONSOLE */}
+        {activeTab === 'tickets' && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <AlertCircle className="text-indigo-600" size={24} />
+                <span>Support & Bug Tickets Console</span>
+              </h2>
+              <p className="text-slate-500 text-sm mt-1">Audit customer and staff bug reports, feature requests, and system issues.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tickets.length === 0 ? (
+                <div className="col-span-full bg-white border border-slate-200 p-8 rounded-2xl text-center text-slate-400 italic">
+                  No support or bug tickets registered in the system.
+                </div>
+              ) : (
+                tickets.map((t) => {
+                  const isBug = t.category === 'Bug';
+                  return (
+                    <div 
+                      key={t.id} 
+                      className={`bg-white border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition duration-150 ${
+                        isBug ? 'border-red-200/80 bg-gradient-to-br from-white to-red-50/10' : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                            isBug 
+                              ? 'bg-red-100 text-red-700 border border-red-200' 
+                              : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                          }`}>
+                            {t.category || 'General'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            t.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {t.status}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-extrabold text-slate-800 line-clamp-1">{t.title}</h4>
+                          <span className="text-[9px] text-slate-400 font-bold block mt-0.5">
+                            From: {t.sender_name || t.senderName} ({t.sender_role || 'customer'})
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 leading-relaxed min-h-[40px] whitespace-pre-wrap">{t.message}</p>
+
+                        {/* Screenshot attachment preview */}
+                        {t.screenshot && (
+                          <div className="pt-2">
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Attached screenshot:</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedScreenshot(t.screenshot)}
+                              className="w-full relative group border border-slate-200 rounded-xl overflow-hidden bg-slate-50 p-1 flex justify-center hover:border-indigo-400 transition"
+                            >
+                              <img src={t.screenshot} alt="Attached screenshot thumbnail" className="max-h-[80px] object-contain rounded-md" />
+                              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition">
+                                Click to View Full Size
+                              </div>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-semibold">
+                        <span>{new Date(t.created_at || t.createdAt).toLocaleDateString()}</span>
+                        {t.status === 'open' && (
+                          <button
+                            onClick={() => handleResolveTicket(t.id)}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold transition"
+                          >
+                            Mark Resolved
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* Warehouse Registration Modal */}
@@ -1918,6 +2042,9 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Lightbox for screenshots */}
+      <ScreenshotLightboxPortal screenshot={selectedScreenshot} onClose={() => setSelectedScreenshot(null)} />
+
     </div>
   );
 };
@@ -2030,3 +2157,31 @@ const InvoiceTable = ({ listUrl }) => {
 
 export default AdminDashboard;
 export { InvoiceTable };
+
+// Modal Portal / Lightbox for Screenshots at root
+const ScreenshotLightboxPortal = ({ screenshot, onClose }) => {
+  if (!screenshot) return null;
+  return (
+    <div 
+      className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-fade-in"
+      onClick={onClose}
+    >
+      <div className="relative max-w-4xl max-h-[85vh] w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="absolute -top-12 right-0 text-white hover:text-slate-350 text-sm font-bold bg-white/10 hover:bg-white/20 rounded-full h-8 w-8 flex items-center justify-center transition"
+        >
+          ✕
+        </button>
+        <img 
+          src={screenshot} 
+          alt="Attached Screenshot Full Size" 
+          className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-slate-700 bg-slate-900 select-none"
+        />
+      </div>
+    </div>
+  );
+};
+
+// We will inject the Lightbox into AdminDashboard component right at the end by exporting wrapper or inside return
+// Let's modify the end of return of AdminDashboard to render it! We'll add the modal trigger inside the return.

@@ -1,6 +1,6 @@
 const { getMySQLPool } = require('../config/db.mysql');
 const { v4: uuidv4 } = require('uuid');
-const { sendSMSAlert } = require('../utils/communication');
+const { sendSMSAlert, sendEmailAlert } = require('../utils/communication');
 
 // Helper to estimate delivery days using local routing formula
 const getFallbackDeliveryTime = (origin, destination, type, weight) => {
@@ -19,9 +19,12 @@ const rowToShipment = (row) => ({
   trackingId: row.tracking_id,
   senderId: row.sender_id,
   senderName: row.sender_name,
+  senderPhone: row.sender_phone,
   recipientName: row.recipient_name,
   recipientAddress: row.recipient_address,
+  originCountry: row.origin_country,
   originCity: row.origin_city,
+  destinationCountry: row.destination_country,
   destinationCity: row.destination_city,
   weight: row.weight,
   dimensions: { length: row.dim_length, width: row.dim_width, height: row.dim_height },
@@ -34,13 +37,32 @@ const rowToShipment = (row) => ({
   paymentId: row.payment_id,
   history: row.history ? (typeof row.history === 'string' ? JSON.parse(row.history) : row.history) : [],
   signature: row.signature,
+  itemDescription: row.item_description,
+  isMetal: row.is_metal === 1 || row.is_metal === true,
+  govtIdProof: row.govt_id_proof,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
 
 // Create / Book Shipment (status: 'Pending Payment')
 const bookShipment = async (req, res, next) => {
-  const { recipientName, recipientAddress, originCity, destinationCity, weight, length, width, height, shipmentType } = req.body;
+  const { 
+    recipientName, 
+    recipientAddress, 
+    originCountry,
+    originCity, 
+    destinationCountry,
+    destinationCity, 
+    weight, 
+    length, 
+    width, 
+    height, 
+    shipmentType,
+    senderPhone,
+    itemDescription,
+    isMetal,
+    govtIdProof
+  } = req.body;
 
   try {
     const pool = getMySQLPool();
@@ -58,11 +80,17 @@ const bookShipment = async (req, res, next) => {
 
     await pool.query(
       `INSERT INTO shipments 
-        (id, tracking_id, sender_id, sender_name, recipient_name, recipient_address, origin_city, destination_city,
-         weight, dim_length, dim_width, dim_height, shipment_type, status, estimated_delivery_days, payment_status, history)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?)`,
-      [id, trackingId, senderId, senderName, recipientName, recipientAddress, originCity, destinationCity,
-       parseFloat(weight), parseFloat(length), parseFloat(width), parseFloat(height), shipmentType, estimatedDeliveryDays, history]
+        (id, tracking_id, sender_id, sender_name, sender_phone, recipient_name, recipient_address, 
+         origin_country, origin_city, destination_country, destination_city,
+         weight, dim_length, dim_width, dim_height, shipment_type, status, estimated_delivery_days, payment_status, history,
+         item_description, is_metal, govt_id_proof)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?)`,
+      [
+        id, trackingId, senderId, senderName, senderPhone || '', recipientName, recipientAddress, 
+        originCountry || 'India', originCity, destinationCountry || 'India', destinationCity,
+        parseFloat(weight), parseFloat(length), parseFloat(width), parseFloat(height), shipmentType, 
+        estimatedDeliveryDays, history, itemDescription || '', isMetal ? 1 : 0, govtIdProof || ''
+      ]
     );
 
     const [rows] = await pool.query('SELECT * FROM shipments WHERE id = ?', [id]);
@@ -206,18 +234,40 @@ const updateShipmentStatus = async (req, res, next) => {
       );
     }
 
-    // Send simulated Twilio SMS alert
+    // Send simulated Twilio SMS and Nodemailer email alert
     try {
-      const [urows] = await pool.query('SELECT phone FROM users WHERE id = ?', [shipment.senderId]);
+      const [urows] = await pool.query('SELECT phone, email FROM users WHERE id = ?', [shipment.senderId]);
       const customerPhone = (urows && urows.length > 0) ? urows[0].phone : '';
-      if (customerPhone) {
-        sendSMSAlert(
-          customerPhone,
-          `Alert from Marine Bytes: Your parcel ${shipment.trackingId} status has changed to [${status}] at [${location || 'Transit Node'}].`
-        );
+      const customerEmail = (urows && urows.length > 0) ? urows[0].email : '';
+
+      if (customerPhone || customerEmail) {
+        let smsMessage = '';
+        let emailSubject = '';
+        let emailBody = '';
+
+        if (status === 'In Transit') {
+          smsMessage = `Alert from Marine Bytes: Your parcel ${shipment.trackingId} is now In Transit.`;
+          emailSubject = `Shipment In Transit: ${shipment.trackingId}`;
+          emailBody = `Dear Customer,\n\nYour parcel with tracking ID ${shipment.trackingId} is now in transit to the destination.\n\nThank you for choosing Marine Bytes!`;
+        } else if (status === 'Delivered') {
+          smsMessage = `Alert from Marine Bytes: Your parcel ${shipment.trackingId} has successfully reached its destination and been delivered.`;
+          emailSubject = `Shipment Delivered: ${shipment.trackingId}`;
+          emailBody = `Dear Customer,\n\nWe are pleased to inform you that your parcel with tracking ID ${shipment.trackingId} has successfully reached the destination and has been delivered.\n\nThank you for choosing Marine Bytes!`;
+        } else {
+          smsMessage = `Alert from Marine Bytes: Your parcel ${shipment.trackingId} status has changed to [${status}] at [${location || 'Transit Node'}].`;
+          emailSubject = `Shipment Update: ${shipment.trackingId} is now ${status}`;
+          emailBody = `Dear Customer,\n\nYour shipment with tracking ID ${shipment.trackingId} has been updated to status: "${status}" at "${location || 'Transit Node'}".\n\nThank you for choosing Marine Bytes!`;
+        }
+
+        if (customerPhone) {
+          sendSMSAlert(customerPhone, smsMessage);
+        }
+        if (customerEmail) {
+          sendEmailAlert(customerEmail, emailSubject, emailBody);
+        }
       }
-    } catch (smsErr) {
-      console.error('Failed to dispatch simulated SMS notification:', smsErr.message);
+    } catch (commErr) {
+      console.error('Failed to dispatch simulated notifications:', commErr.message);
     }
 
     // Socket event
@@ -282,15 +332,16 @@ const getUserTickets = async (req, res, next) => {
 };
 
 const createUserTicket = async (req, res, next) => {
-  const { title, message, category } = req.body;
+  const { title, message, category, screenshot } = req.body;
   try {
     const pool = getMySQLPool();
     const id = uuidv4();
+    const senderRole = req.user.role || 'customer';
     await pool.query(
-      'INSERT INTO tickets (id, user_id, sender_name, category, title, message) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, req.user.id, req.user.name, category || 'General', title, message]
+      'INSERT INTO tickets (id, user_id, sender_name, sender_role, category, title, message, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, req.user.id, req.user.name, senderRole, category || 'General', title, message, screenshot || null]
     );
-    res.status(201).json({ success: true, ticket: { id, userId: req.user.id, title, message, category, status: 'open' } });
+    res.status(201).json({ success: true, ticket: { id, userId: req.user.id, title, message, category, status: 'open', senderRole, screenshot } });
   } catch (error) {
     next(error);
   }

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Truck, User, Key, Lock, Mail, Phone, Loader2, MapPin, Clock, Coins, Globe } from 'lucide-react';
+import { Shield, Truck, User, Key, Lock, Mail, Phone, Loader2, MapPin, Clock, Coins, Globe, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 
 const PortalSelectPage = () => {
   const navigate = useNavigate();
@@ -21,16 +22,18 @@ const PortalSelectPage = () => {
         createAccount: 'Create Account',
         staffHub: 'Staff Hub',
         staffDesc: 'Authorized Operator Credentials Entry Only',
-        fullName: 'Full Name',
+        firstName: 'First Name',
+        lastName: 'Last Name',
         emailAddress: 'Email Address',
-        phoneNum: 'Phone Number (Optional)',
+        phoneNum: 'Phone Number',
         password: 'Password',
         newCustomer: 'New customer? ',
         alreadyAcc: 'Already have an account? ',
         createAccBtn: 'Create an account',
         signInHere: 'Sign In here',
         visitWebsite: 'Visit Company Website',
-        placeholderName: 'Enter your name',
+        placeholderFirstName: 'Enter first name',
+        placeholderLastName: 'Enter last name',
         placeholderEmail: 'Enter email address',
         placeholderPhone: 'Enter phone number'
       },
@@ -41,16 +44,18 @@ const PortalSelectPage = () => {
         createAccount: 'अकाउंट बनाएं',
         staffHub: 'स्टाफ हब',
         staffDesc: 'केवल अधिकृत स्टाफ ऑपरेटर के लिए लॉगिन',
-        fullName: 'पूरा नाम',
+        firstName: 'पहला नाम',
+        lastName: 'अंतिम नाम',
         emailAddress: 'ईमेल पता',
-        phoneNum: 'फ़ोन नंबर (वैकल्पिक)',
+        phoneNum: 'फ़ोन नंबर',
         password: 'पासवर्ड',
         newCustomer: 'नए ग्राहक? ',
         alreadyAcc: 'पहले से ही खाता है? ',
         createAccBtn: 'अकाउंट बनाएं',
         signInHere: 'यहाँ साइन इन करें',
         visitWebsite: 'कंपनी की वेबसाइट पर जाएं',
-        placeholderName: 'अपना नाम दर्ज करें',
+        placeholderFirstName: 'पहला नाम दर्ज करें',
+        placeholderLastName: 'अंतिम नाम दर्ज करें',
         placeholderEmail: 'ईमेल पता दर्ज करें',
         placeholderPhone: 'फ़ोन नंबर दर्ज करें'
       }
@@ -58,12 +63,20 @@ const PortalSelectPage = () => {
     return dict[lang][key] || key;
   };
 
-  const [email, setEmail] = useState('customer1@shiptrack.com');
-  const [password, setPassword] = useState('Customer@123');
-  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [activeFocus, setActiveFocus] = useState(null); // 'name' | 'email' | 'phone' | 'password' | null
+  const [activeFocus, setActiveFocus] = useState(null); // 'firstName' | 'lastName' | 'email' | 'phone' | 'password' | null
+
+  // OTP Verification States
+  const [otpModal, setOtpModal] = useState(false);
+  const [otpMethod, setOtpMethod] = useState('email'); // 'email' | 'sms'
+  const [otpCode, setOtpCode] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Auto-redirect if already logged in
   useEffect(() => {
@@ -75,10 +88,7 @@ const PortalSelectPage = () => {
   const handleDemoFill = (roleType) => {
     setSelectedRole(roleType);
     setActiveTab('login');
-    if (roleType === 'admin') {
-      setEmail('admin@shiptrack.com');
-      setPassword('Admin@123');
-    } else if (roleType === 'staff') {
+    if (roleType === 'staff') {
       setEmail('staff1@shiptrack.com');
       setPassword('Staff@123');
     } else {
@@ -87,14 +97,63 @@ const PortalSelectPage = () => {
     }
   };
 
+  const handleSendOtp = async () => {
+    if (!email || !phone) {
+      return toast.error('Please fill in email and phone number first.');
+    }
+    setSendingOtp(true);
+    try {
+      const res = await axios.post('/auth/send-otp', {
+        email,
+        phone,
+        method: otpMethod
+      });
+      if (res.data.success) {
+        toast.success(res.data.message);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send verification OTP.');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    if (!otpCode) {
+      return toast.error('Please enter the 6-digit OTP code.');
+    }
+    setSubmitting(true);
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+    const res = await register(fullName, email, password, phone, otpCode);
+    setSubmitting(false);
+    if (res?.success) {
+      toast.success(`Registered successfully! Welcome, ${res.user.name}!`);
+      setOtpModal(false);
+      navigate('/customer');
+    } else {
+      toast.error(res?.message || 'OTP verification or registration failed.');
+    }
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setEmail('');
+    setPassword('');
+    setFirstName('');
+    setLastName('');
+    setPhone('');
+    setShowPassword(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       return toast.error('Please fill in all required fields.');
     }
     
-    setSubmitting(true);
     if (activeTab === 'login') {
+      setSubmitting(true);
       const res = await login(email, password);
       setSubmitting(false);
       if (res?.success) {
@@ -104,18 +163,17 @@ const PortalSelectPage = () => {
         toast.error(res?.message || 'Login failed.');
       }
     } else {
-      if (!name) {
-        setSubmitting(false);
-        return toast.error('Please enter your name.');
+      if (!firstName || !lastName) {
+        return toast.error('Please enter first name and last name.');
       }
-      const res = await register(name, email, password, phone);
-      setSubmitting(false);
-      if (res?.success) {
-        toast.success(`Registered successfully! Welcome, ${res.user.name}!`);
-        navigate('/customer');
-      } else {
-        toast.error(res?.message || 'Registration failed.');
+      if (!phone) {
+        return toast.error('Please enter phone number.');
       }
+      // Open OTP Verification Modal first
+      setOtpModal(true);
+      setOtpCode('');
+      // Trigger OTP send automatically to chosen email default
+      toast.success('Verification required. Please choose a method below to receive OTP.');
     }
   };
 
@@ -288,7 +346,7 @@ const PortalSelectPage = () => {
               <div className="flex border-b border-slate-800 mb-8">
                 <button
                   type="button"
-                  onClick={() => { setActiveTab('login'); }}
+                  onClick={() => { handleTabChange('login'); }}
                   className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
                     activeTab === 'login' 
                       ? 'text-indigo-400 border-indigo-500' 
@@ -299,7 +357,7 @@ const PortalSelectPage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setActiveTab('register'); }}
+                  onClick={() => { handleTabChange('register'); }}
                   className={`flex-1 pb-4 text-center font-bold text-sm transition border-b-2 ${
                     activeTab === 'register' 
                       ? 'text-indigo-400 border-indigo-500' 
@@ -330,13 +388,6 @@ const PortalSelectPage = () => {
                       key={role.key}
                       onClick={() => {
                         setSelectedRole(role.key);
-                        if (role.key === 'staff') {
-                          setEmail('staff1@shiptrack.com');
-                          setPassword('Staff@123');
-                        } else {
-                          setEmail('customer1@shiptrack.com');
-                          setPassword('Customer@123');
-                        }
                       }}
                       className={`flex flex-col items-center justify-center p-3.5 rounded-2xl border text-xs font-semibold transition ${
                         isSel 
@@ -356,22 +407,42 @@ const PortalSelectPage = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               
               {activeTab === 'register' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    {t('fullName')}
-                  </label>
-                  <div className="relative">
-                    <User className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'name' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
-                    <input
-                      type="text"
-                      placeholder={t('placeholderName')}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onFocus={() => setActiveFocus('name')}
-                      onBlur={() => setActiveFocus(null)}
-                      className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
-                      required
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {t('firstName')}
+                    </label>
+                    <div className="relative">
+                      <User className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'firstName' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
+                      <input
+                        type="text"
+                        placeholder={t('placeholderFirstName')}
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        onFocus={() => setActiveFocus('firstName')}
+                        onBlur={() => setActiveFocus(null)}
+                        className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {t('lastName')}
+                    </label>
+                    <div className="relative">
+                      <User className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'lastName' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
+                      <input
+                        type="text"
+                        placeholder={t('placeholderLastName')}
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        onFocus={() => setActiveFocus('lastName')}
+                        onBlur={() => setActiveFocus(null)}
+                        className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -410,6 +481,7 @@ const PortalSelectPage = () => {
                       onFocus={() => setActiveFocus('phone')}
                       onBlur={() => setActiveFocus(null)}
                       className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                      required
                     />
                   </div>
                 </div>
@@ -422,15 +494,22 @@ const PortalSelectPage = () => {
                 <div className="relative">
                   <Lock className={`absolute left-3.5 top-3.5 transition-colors duration-200 ${activeFocus === 'password' ? 'text-indigo-500' : 'text-slate-500'}`} size={18} />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onFocus={() => setActiveFocus('password')}
                     onBlur={() => setActiveFocus(null)}
-                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                    className="w-full bg-slate-950/40 border border-slate-800 rounded-xl py-3 pl-11 pr-12 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3 text-slate-500 hover:text-indigo-400 transition"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
 
@@ -457,7 +536,7 @@ const PortalSelectPage = () => {
                       <span className="text-xs text-slate-400">New customer? </span>
                       <button
                         type="button"
-                        onClick={() => { setActiveTab('register'); setSelectedRole('customer'); }}
+                        onClick={() => { handleTabChange('register'); setSelectedRole('customer'); }}
                         className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition underline"
                       >
                         Create an account
@@ -468,7 +547,7 @@ const PortalSelectPage = () => {
                       <span className="text-xs text-slate-400">Already have an account? </span>
                       <button
                         type="button"
-                        onClick={() => { setActiveTab('login'); }}
+                        onClick={() => { handleTabChange('login'); }}
                         className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition underline"
                       >
                         Sign In here
@@ -494,6 +573,102 @@ const PortalSelectPage = () => {
         </div>
 
       </div>
+
+      {/* OTP Verification Modal */}
+      {otpModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div 
+            className="w-full max-w-md p-6 md:p-8 rounded-3xl border text-slate-100 shadow-2xl space-y-6"
+            style={{ backgroundColor: 'rgba(17, 24, 39, 0.95)', borderColor: 'rgba(99, 102, 241, 0.3)' }}
+          >
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-12 h-12 bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 rounded-2xl flex items-center justify-center">
+                <Shield size={24} className="animate-pulse" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Verify Your Contact Details</h3>
+              <p className="text-xs text-slate-400">Choose where to receive your 6-digit verification code:</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setOtpMethod('email')}
+                className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center justify-center transition space-y-1.5 ${
+                  otpMethod === 'email'
+                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Mail size={16} />
+                <span>Email ({email.slice(0, 3)}...{email.slice(email.indexOf('@') - 2)})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOtpMethod('sms')}
+                className={`p-3 rounded-2xl border text-xs font-semibold flex flex-col items-center justify-center transition space-y-1.5 ${
+                  otpMethod === 'sms'
+                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400'
+                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Phone size={16} />
+                <span>Mobile ({phone.slice(0, 4)}...{phone.slice(-3)})</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={sendingOtp}
+              className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-750 disabled:bg-slate-800 text-white font-bold rounded-xl py-3 shadow-md transition duration-200 text-xs"
+            >
+              {sendingOtp ? (
+                <Loader2 className="animate-spin" size={14} />
+              ) : (
+                <span>Send Verification OTP</span>
+              )}
+            </button>
+
+            <form onSubmit={handleVerifyAndRegister} className="space-y-4 pt-4 border-t border-slate-850">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+                  Enter 6-Digit OTP Code
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full text-center bg-slate-950/60 border border-slate-800 rounded-xl py-3 text-lg font-mono font-bold tracking-[0.5em] text-white focus:outline-none focus:border-indigo-500 transition"
+                  required
+                />
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setOtpModal(false)}
+                  className="flex-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-xl py-3 text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-2 w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl py-3 text-xs transition flex items-center justify-center space-x-1"
+                >
+                  {submitting ? (
+                    <Loader2 className="animate-spin" size={14} />
+                  ) : (
+                    <span>Verify & Register</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

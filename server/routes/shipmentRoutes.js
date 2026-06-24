@@ -36,8 +36,8 @@ router.put('/:shipmentId/assign', protect, authorize('admin'), assignShipment);
 router.put('/:shipmentId/status', protect, authorize('admin', 'staff'), updateShipmentStatus);
 
 // Support Ticket Routes
-router.get('/tickets', protect, authorize('admin', 'customer'), getUserTickets);
-router.post('/tickets', protect, authorize('customer'), createUserTicket);
+router.get('/tickets', protect, authorize('admin', 'customer', 'staff'), getUserTickets);
+router.post('/tickets', protect, authorize('customer', 'staff'), createUserTicket);
 router.put('/tickets/:ticketId/resolve', protect, authorize('admin'), resolveUserTicket);
 
 module.exports = router;
