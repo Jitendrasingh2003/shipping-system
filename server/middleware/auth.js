@@ -15,12 +15,16 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'smartship_jwt_super_secret_signing_key_2026');
     const pool = getMySQLPool();
     const [rows] = await pool.query(
-      'SELECT id, name, email, role, phone FROM users WHERE id = ?',
+      'SELECT id, name, email, role, phone, is_blocked FROM users WHERE id = ?',
       [decoded.id]
     );
 
     if (rows.length === 0) {
       return res.status(401).json({ success: false, message: 'User not found or session invalid.' });
+    }
+
+    if (rows[0].is_blocked === 1 || rows[0].is_blocked === true) {
+      return res.status(403).json({ success: false, message: 'Access denied. Your account has been blocked.' });
     }
 
     req.user = rows[0];

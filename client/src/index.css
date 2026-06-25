@@ -50,3 +50,23 @@
 .text-glow-cyan {
   text-shadow: 0 0 8px rgba(6, 182, 212, 0.2);
 }
+
+/* Fix contrast of select and option elements in light/dark container contexts */
+select {
+  color: #1f2937 !important; /* default slate-800 text */
+}
+
+option {
+  color: #1f2937 !important;
+  background-color: #ffffff !important;
+}
+
+/* Override for dark select elements (e.g. QR simulation modals) */
+select.text-white {
+  color: #ffffff !important;
+}
+
+select.text-white option {
+  color: #ffffff !important;
+  background-color: #1f2937 !important;
+}

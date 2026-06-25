@@ -171,7 +171,7 @@ const getMe = async (req, res) => {
 const getAllStaff = async (req, res, next) => {
   try {
     const pool = getMySQLPool();
-    const [rows] = await pool.query("SELECT id, name, email, phone FROM users WHERE role = 'staff'");
+    const [rows] = await pool.query("SELECT id, name, email, phone, is_blocked AS isBlocked FROM users WHERE role = 'staff'");
     res.status(200).json({ success: true, staff: rows });
   } catch (error) {
     next(error);

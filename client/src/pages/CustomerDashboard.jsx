@@ -9,7 +9,7 @@ import {
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
   BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
-  BarChart2, Coins, Globe, Bug, Camera
+  BarChart2, Coins, Globe, Bug, Camera, ClipboardList, Phone, User, Anchor, TrendingUp, Ship, Activity
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -23,6 +23,102 @@ const COUNTRIES_AND_CITIES = {
 const CITIES = COUNTRIES_AND_CITIES['India'];
 const SHIPMENT_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
 const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+const VESSEL_DATA = {
+  'MV Blue Horizon': {
+    name: 'MV Blue Horizon',
+    imo: 'IMO 9846201',
+    callSign: 'V7XW8',
+    flag: 'Panama 🇵🇦',
+    route: 'Mumbai Port ➔ Dubai Jebel Ali',
+    speed: '22.4 kn',
+    cargo: '4,200 TEU',
+    progress: 64,
+    eta: '1.2 Days',
+    status: 'Cruising',
+    statusColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    coordinates: '19°05\'N, 70°22\'E (Arabian Sea)',
+    engineTemp: 82,
+    fuelLevel: 78,
+    draftDepth: 12.4,
+    crewOnBoard: 24,
+    cargoDistribution: [
+      { name: 'Dry Cargo', value: 40, color: 'bg-indigo-500' },
+      { name: 'Reefer Cargo', value: 30, color: 'bg-emerald-500' },
+      { name: 'Hazardous', value: 15, color: 'bg-amber-500' },
+      { name: 'Special Delivery', value: 15, color: 'bg-purple-500' }
+    ]
+  },
+  'MV Atlantic Clipper': {
+    name: 'MV Atlantic Clipper',
+    imo: 'IMO 9621458',
+    callSign: 'ZQD82',
+    flag: 'Singapore 🇸🇬',
+    route: 'Chennai Port ➔ Singapore Terminal',
+    speed: '18.2 kn',
+    cargo: '2,800 TEU',
+    progress: 82,
+    eta: '0.4 Days',
+    status: 'Arriving',
+    statusColor: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+    coordinates: '5°55\'N, 95°12\'E (Strait of Malacca)',
+    engineTemp: 79,
+    fuelLevel: 45,
+    draftDepth: 10.8,
+    crewOnBoard: 18,
+    cargoDistribution: [
+      { name: 'Dry Cargo', value: 50, color: 'bg-indigo-500' },
+      { name: 'Reefer Cargo', value: 20, color: 'bg-emerald-500' },
+      { name: 'Hazardous', value: 10, color: 'bg-amber-500' },
+      { name: 'Special Delivery', value: 20, color: 'bg-purple-500' }
+    ]
+  },
+  'MV Pacific Swift': {
+    name: 'MV Pacific Swift',
+    imo: 'IMO 9912543',
+    callSign: 'A3FD9',
+    flag: 'Marshall Islands 🇲🇭',
+    route: 'Dubai Port ➔ Rotterdam Terminal',
+    speed: '24.1 kn',
+    cargo: '6,400 TEU',
+    progress: 21,
+    eta: '9.8 Days',
+    status: 'Cruising',
+    statusColor: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+    coordinates: '12°11\'N, 43°30\'E (Gulf of Aden)',
+    engineTemp: 85,
+    fuelLevel: 91,
+    draftDepth: 14.2,
+    crewOnBoard: 32,
+    cargoDistribution: [
+      { name: 'Dry Cargo', value: 35, color: 'bg-indigo-500' },
+      { name: 'Reefer Cargo', value: 35, color: 'bg-emerald-500' },
+      { name: 'Hazardous', value: 20, color: 'bg-amber-500' },
+      { name: 'Special Delivery', value: 10, color: 'bg-purple-500' }
+    ]
+  }
+};
+
+const getCurrencyForCountries = (origin, dest) => {
+  const o = (origin || '').toLowerCase();
+  const d = (dest || '').toLowerCase();
+  if (o === 'india' && d === 'india') return 'INR';
+  
+  const target = o !== 'india' ? o : d;
+  if (target.includes('united states') || target.includes('us')) return 'USD';
+  if (target.includes('united kingdom') || target.includes('gb') || target.includes('uk')) return 'GBP';
+  if (target.includes('united arab emirates') || target.includes('uae')) return 'AED';
+  if (target.includes('australia')) return 'AUD';
+  return 'USD';
+};
+
+const getCurrencySymbol = (currency) => {
+  if (currency === 'USD') return '$';
+  if (currency === 'GBP') return '£';
+  if (currency === 'AED') return 'د.إ';
+  if (currency === 'AUD') return 'A$';
+  return '₹';
+};
 
 const CustomerDashboard = () => {
   const { logout, user } = useAuth();
@@ -111,6 +207,11 @@ const CustomerDashboard = () => {
   const [itemDescription, setItemDescription] = useState('');
   const [isMetal, setIsMetal] = useState(false);
   const [govtIdProof, setGovtIdProof] = useState('');
+  const [pickupDate, setPickupDate] = useState('');
+  const [consignmentCategory, setConsignmentCategory] = useState('Parcel');
+  const [declaredValue, setDeclaredValue] = useState('1000');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [customsDescription, setCustomsDescription] = useState('');
 
   useEffect(() => {
     if (user && user.phone && !senderPhone) {
@@ -177,6 +278,18 @@ const CustomerDashboard = () => {
   const [payingShipment, setPayingShipment] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // International Checkout Modal State
+  const [intlCheckoutOpen, setIntlCheckoutOpen] = useState(false);
+  const [intlCheckoutShipment, setIntlCheckoutShipment] = useState(null);
+  const [intlCheckoutOrder, setIntlCheckoutOrder] = useState(null);
+  const [selectedGateway, setSelectedGateway] = useState('Stripe');
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('4242 4242 4242 4242');
+  const [cardExpiry, setCardExpiry] = useState('12/28');
+  const [cardCvc, setCardCvc] = useState('123');
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [submittingIntlPayment, setSubmittingIntlPayment] = useState(false);
+
   // Chat and Map Refs/States
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessageText, setNewMessageText] = useState('');
@@ -198,6 +311,31 @@ const CustomerDashboard = () => {
   const [bugInput, setBugInput] = useState('');
   const [bugScreenshot, setBugScreenshot] = useState(null);
   const [bugLoading, setBugLoading] = useState(false);
+
+  // Cancel Shipment State
+  const [cancellingId, setCancellingId] = useState(null);
+
+  // Rating Modal State
+  const [ratingModal, setRatingModal] = useState(false);
+  const [ratingShipment, setRatingShipment] = useState(null);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  // Re-Order loading state
+  const [reOrdering, setReOrdering] = useState(null);
+
+  // Marine Command Control Center interactive local states
+  const [selectedVessel, setSelectedVessel] = useState('MV Blue Horizon');
+  const [aisLogs, setAisLogs] = useState([
+    { time: '22:01:05', tag: 'AIS', msg: 'MV Blue Horizon: Position updated - Lat: 19.01, Lon: 70.85' },
+    { time: '22:00:15', tag: 'SYS', msg: 'All vessel transponders online and transmitting.' },
+    { time: '21:58:50', tag: 'MET', msg: 'Swell warning issued for Arabian Sea - MV Atlantic Clipper routing adjusted' },
+    { time: '21:55:12', tag: 'PORT', msg: 'Rotterdam Terminal Quay 4 cleared for MV Pacific Swift arrival' }
+  ]);
+  const [transponderStatus, setTransponderStatus] = useState('idle'); // 'idle' | 'pinging' | 'completed'
+  const [etaRecalculating, setEtaRecalculating] = useState(false);
+  const [activeGaugeDetail, setActiveGaugeDetail] = useState(null); // null | 'terminal' | 'deck' | 'eco'
 
   const fetchData = async () => {
     try {
@@ -248,14 +386,42 @@ const CustomerDashboard = () => {
     fetchData();
   }, []);
 
+  // Simulate live AIS and command logs ticking
+  useEffect(() => {
+    if (activeTab !== 'analytics') return;
+    
+    const logsPool = [
+      { tag: 'AIS', msg: 'MV Blue Horizon: Engine RPM optimized to 95. Speed stable at 22.4 kn.' },
+      { tag: 'MET', msg: 'Dubai Port Jebel Ali reports local wind speed 12 kn. Wave height 0.8m.' },
+      { tag: 'SYS', msg: 'Vessel fuel consumption efficiency index registered at 92.4%.' },
+      { tag: 'AIS', msg: 'MV Pacific Swift: Passed Bab-el-Mandeb strait heading north-west.' },
+      { tag: 'PORT', msg: 'Mumbai Port Terminal 2 customs clearance batch pre-approved.' },
+      { tag: 'AIS', msg: 'MV Atlantic Clipper: Port pilot requested for Singapore approach.' },
+      { tag: 'SYS', msg: 'Telemetry check: GPS coordinates verified with oceanic satellite link.' }
+    ];
+
+    const interval = setInterval(() => {
+      const randomLog = logsPool[Math.floor(Math.random() * logsPool.length)];
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      setAisLogs(prev => [
+        { time: timeStr, tag: randomLog.tag, msg: randomLog.msg },
+        ...prev.slice(0, 10) // Keep last 11 logs
+      ]);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   const exportInvoicesToCSV = () => {
     if (invoices.length === 0) return toast.error('No invoices to export.');
-    const headers = ['Invoice Number', 'Date', 'Payment ID', 'Amount Paid'];
+    const headers = ['Invoice Number', 'Date', 'Payment ID', 'Amount Paid', 'Currency'];
     const rows = invoices.map(inv => [
       inv.invoiceNumber,
       new Date(inv.createdAt).toLocaleDateString(),
       inv.paymentId,
-      inv.amount
+      inv.amount,
+      inv.currency || 'INR'
     ]);
     const csvContent = [
       headers.join(','),
@@ -731,7 +897,12 @@ const CustomerDashboard = () => {
         senderPhone,
         itemDescription,
         isMetal,
-        govtIdProof
+        govtIdProof,
+        pickupDate,
+        consignmentCategory,
+        declaredValue,
+        recipientPhone,
+        customsDescription
       });
 
       if (res.data.success) {
@@ -742,6 +913,11 @@ const CustomerDashboard = () => {
         setItemDescription('');
         setIsMetal(false);
         setGovtIdProof('');
+        setPickupDate('');
+        setConsignmentCategory('Parcel');
+        setDeclaredValue('1000');
+        setRecipientPhone('');
+        setCustomsDescription('');
         
         setPayingShipment(res.data.shipment);
         setActiveTab('orders');
@@ -756,7 +932,18 @@ const CustomerDashboard = () => {
     setPaymentLoading(true);
     try {
       const orderRes = await axios.post('/payments/order', { shipmentId: shipment.id });
-      const { order, keyId, amount, isMock } = orderRes.data;
+      const { order, keyId, amount, currency, isMock } = orderRes.data;
+
+      if (order.isInternational) {
+        setPaymentLoading(false);
+        setIntlCheckoutShipment(shipment);
+        setIntlCheckoutOrder(order);
+        setSelectedGateway('Stripe');
+        setCardName(user.name);
+        setPaypalEmail(user.email);
+        setIntlCheckoutOpen(true);
+        return;
+      }
 
       if (isMock) {
         toast.loading('Simulating Payment Verification...', { id: 'verify' });
@@ -835,6 +1022,74 @@ const CustomerDashboard = () => {
     }
   };
 
+  // Cancel Shipment
+  const handleCancelShipment = async (shipmentId) => {
+    if (!window.confirm('Are you sure you want to cancel this shipment? This action cannot be undone.')) return;
+    setCancellingId(shipmentId);
+    try {
+      const res = await axios.put(`/shipments/${shipmentId}/cancel`);
+      if (res.data.success) {
+        toast.success('Shipment cancelled successfully.');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to cancel shipment.');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  // Open Rating Modal
+  const openRatingModal = (shipment) => {
+    setRatingShipment(shipment);
+    setSelectedRating(shipment.customerRating || 0);
+    setRatingFeedback(shipment.customerFeedback || '');
+    setRatingModal(true);
+  };
+
+  // Submit Rating
+  const handleSubmitRating = async (e) => {
+    e.preventDefault();
+    if (selectedRating === 0) return toast.error('Please select a rating from 1 to 5 stars.');
+    setSubmittingRating(true);
+    try {
+      const res = await axios.post(`/shipments/${ratingShipment.id}/rate`, {
+        rating: selectedRating,
+        feedback: ratingFeedback
+      });
+      if (res.data.success) {
+        toast.success('⭐ Thank you for your feedback!');
+        setRatingModal(false);
+        setRatingShipment(null);
+        setSelectedRating(0);
+        setRatingFeedback('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit rating.');
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  // Re-Order Shipment
+  const handleReOrder = async (shipmentId) => {
+    setReOrdering(shipmentId);
+    try {
+      const res = await axios.post(`/shipments/${shipmentId}/reorder`);
+      if (res.data.success) {
+        toast.success('Shipment re-ordered! Redirecting to payment...');
+        setPayingShipment(res.data.shipment);
+        setActiveTab('orders');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Re-order failed.');
+    } finally {
+      setReOrdering(null);
+    }
+  };
+
   const handleDownloadInvoice = async (invoiceNumber) => {
     try {
       toast.loading('Downloading invoice...', { id: 'download' });
@@ -851,6 +1106,202 @@ const CustomerDashboard = () => {
     } catch (err) {
       toast.error('Failed to download PDF.', { id: 'download' });
     }
+  };
+
+  const generateBarcodeSvg = (text) => {
+    const binary = text.split('').map(char => {
+      const code = char.charCodeAt(0);
+      return (code * 13247).toString(2).slice(-9);
+    }).join('0');
+    
+    let svgContent = '';
+    let x = 10;
+    for (let i = 0; i < binary.length; i++) {
+      const isBlack = binary[i] === '1';
+      const width = isBlack ? 2 : 1;
+      if (isBlack) {
+        svgContent += `<rect x="${x}" y="10" width="${width}" height="60" fill="black" />`;
+      }
+      x += width + 1;
+    }
+    
+    return `<svg width="${x + 10}" height="80" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+  };
+
+  const handlePrintLabel = (shipment) => {
+    const barcodeSvg = generateBarcodeSvg(shipment.trackingId);
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    const html = `
+      <html>
+        <head>
+          <title>Marine Bytes Shipment Label - ${shipment.trackingId}</title>
+          <style>
+            body {
+              font-family: 'Inter', system-ui, sans-serif;
+              margin: 0;
+              padding: 20px;
+              background-color: #ffffff;
+              color: #1e293b;
+            }
+            .label-container {
+              border: 3px solid #000000;
+              padding: 24px;
+              max-width: 500px;
+              margin: 0 auto;
+              border-radius: 12px;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #000000;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            }
+            .logo {
+              font-size: 22px;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .service-badge {
+              background-color: #000000;
+              color: #ffffff;
+              padding: 6px 12px;
+              font-weight: 800;
+              font-size: 14px;
+              border-radius: 6px;
+              text-transform: uppercase;
+            }
+            .address-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              border-bottom: 1px dashed #000000;
+              padding-bottom: 16px;
+              margin-bottom: 16px;
+            }
+            .address-title {
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              color: #64748b;
+              margin-bottom: 4px;
+            }
+            .address-name {
+              font-weight: 700;
+              font-size: 14px;
+              margin-bottom: 2px;
+            }
+            .address-detail {
+              font-size: 12px;
+              line-height: 1.4;
+            }
+            .details-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 12px;
+              border-bottom: 2px solid #000000;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            }
+            .detail-item {
+              text-align: center;
+              background-color: #f8fafc;
+              padding: 8px;
+              border-radius: 6px;
+            }
+            .detail-label {
+              font-size: 9px;
+              font-weight: 700;
+              text-transform: uppercase;
+              color: #64748b;
+            }
+            .detail-val {
+              font-size: 12px;
+              font-weight: 700;
+              margin-top: 2px;
+            }
+            .barcode-wrapper {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              margin-top: 20px;
+            }
+            .barcode-text {
+              font-family: monospace;
+              font-size: 14px;
+              font-weight: 700;
+              letter-spacing: 3px;
+              margin-top: 6px;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+              .label-container {
+                border: 3px solid #000000;
+                box-shadow: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="label-container">
+            <div class="header">
+              <div class="logo">Marine Bytes</div>
+              <div class="service-badge">${shipment.shipmentType}</div>
+            </div>
+            
+            <div class="address-section">
+              <div>
+                <div class="address-title">From (Sender)</div>
+                <div class="address-name">${shipment.senderName || 'Valued Customer'}</div>
+                <div class="address-detail">City: ${shipment.originCity}</div>
+                <div class="address-detail">Phone: ${shipment.senderPhone || '-'}</div>
+              </div>
+              <div>
+                <div class="address-title">To (Recipient)</div>
+                <div class="address-name">${shipment.recipientName}</div>
+                <div class="address-detail">${shipment.recipientAddress}</div>
+                <div class="address-detail">City: ${shipment.destinationCity}</div>
+              </div>
+            </div>
+            
+            <div class="details-grid">
+              <div class="detail-item">
+                <div class="detail-label">Weight</div>
+                <div class="detail-val">${shipment.weight} kg</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Dimensions</div>
+                <div class="detail-val">${shipment.dimensions?.length || 10}x${shipment.dimensions?.width || 10}x${shipment.dimensions?.height || 10} cm</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Scheduled Pickup</div>
+                <div class="detail-val">${shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : 'Today'}</div>
+              </div>
+            </div>
+            
+            <div class="barcode-wrapper">
+              ${barcodeSvg}
+              <div class="barcode-text">${shipment.trackingId}</div>
+            </div>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   if (loading) {
@@ -954,6 +1405,34 @@ const CustomerDashboard = () => {
             {/* TAB 1: ORDERS */}
             {activeTab === 'orders' && (
               <div className="space-y-6 animate-fade-in">
+                
+                {/* 🚢 Realistic Maritime Logistics Banner */}
+                <div className="relative rounded-3xl overflow-hidden border border-slate-200/80 bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-xl h-48 md:h-56 flex items-center p-6 md:p-8">
+                  {/* Banner Image Background with subtle overlay */}
+                  <div className="absolute inset-0 z-0">
+                    <img 
+                      src="/cargo_ship_banner.png" 
+                      alt="Maritime Logistics" 
+                      className="w-full h-full object-cover opacity-35 mix-blend-overlay"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-transparent"></div>
+                  </div>
+                  
+                  {/* Banner Content */}
+                  <div className="relative z-10 space-y-3 max-w-lg text-left">
+                    <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[10px] font-extrabold uppercase tracking-widest">
+                      <Globe size={12} className="animate-spin-slow" />
+                      <span>Oceanic Fleet Terminal Active</span>
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                      Manage Maritime Cargo <span className="text-indigo-400">&</span> Global Deliveries
+                    </h2>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Book international sea-freight channels, verify customs KYC parameters, and track active container fleets from port to port in real-time.
+                    </p>
+                  </div>
+                </div>
+
                 {payingShipment && (
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center space-x-3 text-amber-700">
@@ -1018,13 +1497,14 @@ const CustomerDashboard = () => {
                           <th className="pb-3">Est. Days</th>
                           <th className="pb-3">Service</th>
                           <th className="pb-3">Status</th>
+                          <th className="pb-3">Rating</th>
                           <th className="pb-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {shipments.length === 0 ? (
                           <tr>
-                            <td colSpan="6" className="py-6 text-center text-slate-400 italic">No shipment records found.</td>
+                            <td colSpan="7" className="py-6 text-center text-slate-400 italic">No shipment records found.</td>
                           </tr>
                         ) : (
                           shipments.map((shipment) => (
@@ -1038,20 +1518,77 @@ const CustomerDashboard = () => {
                                 </span>
                               </td>
                               <td className="py-3.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  shipment.status === 'Delivered' ? 'bg-emerald-100 text-emerald-700' :
-                                  shipment.status === 'Pending Payment' ? 'bg-slate-100 text-slate-400' :
-                                  'bg-indigo-100 text-indigo-700 animate-pulse'
-                                }`}>
-                                  {shipment.status}
-                                </span>
+                                <div className="space-y-1">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    shipment.status === 'Delivered' ? 'bg-emerald-100 text-emerald-700' :
+                                    shipment.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
+                                    shipment.status === 'Pending Payment' ? 'bg-slate-100 text-slate-400' :
+                                    'bg-indigo-100 text-indigo-700 animate-pulse'
+                                  }`}>
+                                    {shipment.status}
+                                  </span>
+                                  {shipment.status === 'Out for Delivery' && shipment.deliveryOtp && (
+                                    <div className="text-[10px] font-extrabold text-cyan-600 bg-cyan-50 border border-cyan-100 px-1.5 py-0.5 rounded w-max mt-1">
+                                      OTP: {shipment.deliveryOtp}
+                                    </div>
+                                  )}
+                                </div>
                               </td>
-                              <td className="py-3.5 text-right space-x-2">
-                                {shipment.status === 'Pending Payment' ? (
-                                  <button onClick={() => handlePayment(shipment)} className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold transition">Pay & Book</button>
+                              <td className="py-3.5">
+                                {shipment.customerRating ? (
+                                  <span className="flex items-center gap-0.5">
+                                    {[1,2,3,4,5].map(s => (
+                                      <span key={s} className={`text-sm ${s <= shipment.customerRating ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                                    ))}
+                                  </span>
                                 ) : (
-                                  <button onClick={() => handleTrack(shipment)} className="px-3.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold transition">Track Logs</button>
+                                  <span className="text-slate-300 text-[10px] italic">—</span>
                                 )}
+                              </td>
+                              <td className="py-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {shipment.status === 'Pending Payment' && (
+                                    <button onClick={() => handlePayment(shipment)} className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold transition text-[10px]">Pay & Book</button>
+                                  )}
+                                  {(shipment.status === 'Pending Payment' || shipment.status === 'Booked') && (
+                                    <button
+                                      onClick={() => handleCancelShipment(shipment.id)}
+                                      disabled={cancellingId === shipment.id}
+                                      className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold transition text-[10px] disabled:opacity-50"
+                                    >
+                                      {cancellingId === shipment.id ? '...' : 'Cancel'}
+                                    </button>
+                                  )}
+                                  {shipment.status !== 'Pending Payment' && shipment.status !== 'Cancelled' && (
+                                    <>
+                                      <button onClick={() => handleTrack(shipment)} className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold transition text-[10px]">Track</button>
+                                      <button
+                                        onClick={() => handlePrintLabel(shipment)}
+                                        className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold transition text-[10px] flex items-center gap-1"
+                                      >
+                                        <FileText size={10} />
+                                        <span>Label</span>
+                                      </button>
+                                    </>
+                                  )}
+                                  {shipment.status === 'Delivered' && !shipment.customerRating && (
+                                    <button
+                                      onClick={() => openRatingModal(shipment)}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold transition text-[10px] flex items-center gap-1"
+                                    >
+                                      ⭐ Rate
+                                    </button>
+                                  )}
+                                  {(shipment.status === 'Delivered' || shipment.status === 'Cancelled') && (
+                                    <button
+                                      onClick={() => handleReOrder(shipment.id)}
+                                      disabled={reOrdering === shipment.id}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition text-[10px] disabled:opacity-50"
+                                    >
+                                      {reOrdering === shipment.id ? '...' : '🔄 Re-Order'}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -1060,110 +1597,749 @@ const CustomerDashboard = () => {
                     </table>
                   </div>
                 </div>
+
+                {/* ⭐ Rating Modal */}
+                {ratingModal && ratingShipment && (
+                  <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+                      <h3 className="text-lg font-extrabold text-slate-800 mb-1">Rate Your Delivery</h3>
+                      <p className="text-xs text-slate-500 mb-6">Tracking ID: <span className="font-bold text-indigo-600">{ratingShipment.trackingId}</span></p>
+                      <form onSubmit={handleSubmitRating} className="space-y-5">
+                        <div>
+                          <p className="text-xs font-bold text-slate-600 mb-2">Your Rating *</p>
+                          <div className="flex gap-2">
+                            {[1,2,3,4,5].map(star => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setSelectedRating(star)}
+                                className={`text-4xl transition-transform hover:scale-110 ${star <= selectedRating ? 'text-amber-400' : 'text-slate-200'}`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+                          {selectedRating > 0 && (
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              {selectedRating === 1 ? '😞 Poor' : selectedRating === 2 ? '😐 Fair' : selectedRating === 3 ? '🙂 Good' : selectedRating === 4 ? '😊 Very Good' : '🤩 Excellent!'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-600 block mb-1">Feedback (optional)</label>
+                          <textarea
+                            value={ratingFeedback}
+                            onChange={e => setRatingFeedback(e.target.value)}
+                            rows={3}
+                            placeholder="Tell us about your experience..."
+                            className="w-full border border-slate-200 rounded-xl p-3 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 transition resize-none"
+                          />
+                        </div>
+                        <div className="flex gap-3">
+                          <button type="button" onClick={() => setRatingModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">Cancel</button>
+                          <button type="submit" disabled={submittingRating || selectedRating === 0} className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold transition disabled:opacity-50">
+                            {submittingRating ? 'Submitting...' : '⭐ Submit Rating'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* 💳 International Checkout Simulator Modal */}
+                {intlCheckoutOpen && intlCheckoutShipment && intlCheckoutOrder && (
+                  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in border border-slate-100 text-left">
+                      
+                      {/* Modal Header */}
+                      <div className="bg-indigo-900 text-white p-6 relative">
+                        <h3 className="text-lg font-extrabold flex items-center gap-2">
+                          <Globe size={18} className="animate-spin-slow" />
+                          <span>Secure International Checkout</span>
+                        </h3>
+                        <p className="text-xs text-indigo-200 mt-1">Simulating payment for booking {intlCheckoutShipment.trackingId}</p>
+                        <button
+                          type="button"
+                          onClick={() => setIntlCheckoutOpen(false)}
+                          className="absolute top-6 right-6 text-indigo-200 hover:text-white transition font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Modal Content */}
+                      <div className="p-6 space-y-6">
+                        
+                        {/* Amount Display */}
+                        <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex justify-between items-center">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Amount</span>
+                            <span className="text-xs text-slate-500 font-semibold">{intlCheckoutShipment.originCity} → {intlCheckoutShipment.destinationCity}</span>
+                          </div>
+                          <span className="text-2xl font-black text-indigo-950">
+                            {getCurrencySymbol(intlCheckoutOrder.currency)} {Number(intlCheckoutOrder.amount).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Gateway Select Tabs */}
+                        <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGateway('Stripe')}
+                            className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 ${
+                              selectedGateway === 'Stripe'
+                                ? 'bg-white text-indigo-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <span>💳 Stripe Card</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGateway('PayPal')}
+                            className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 ${
+                              selectedGateway === 'PayPal'
+                                ? 'bg-white text-blue-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <span>🅿️ PayPal</span>
+                          </button>
+                        </div>
+
+                        {/* Gateway Form */}
+                        {selectedGateway === 'Stripe' ? (
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Name on Card</label>
+                              <input
+                                type="text"
+                                value={cardName}
+                                onChange={(e) => setCardName(e.target.value)}
+                                className="w-full border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                                placeholder="John Doe"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Card Number</label>
+                              <input
+                                type="text"
+                                value={cardNumber}
+                                onChange={(e) => setCardNumber(e.target.value)}
+                                className="w-full border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                                placeholder="4242 4242 4242 4242"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiry Date</label>
+                                <input
+                                  type="text"
+                                  value={cardExpiry}
+                                  onChange={(e) => setCardExpiry(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 font-medium text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                                  placeholder="MM/YY"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CVC Code</label>
+                                <input
+                                  type="text"
+                                  value={cardCvc}
+                                  onChange={(e) => setCardCvc(e.target.value)}
+                                  className="w-full border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 font-medium text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                                  placeholder="123"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">PayPal Email Address</label>
+                              <input
+                                type="email"
+                                value={paypalEmail}
+                                onChange={(e) => setPaypalEmail(e.target.value)}
+                                className="w-full border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                                placeholder="paypal@example.com"
+                              />
+                            </div>
+                            <div className="bg-blue-50/50 border border-blue-100 text-blue-800 p-3.5 rounded-xl text-[11px] leading-relaxed">
+                              You will be redirected to simulated PayPal Express secure checkout environment to approve the pre-authorized transaction.
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Submit Action */}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSubmittingIntlPayment(true);
+                            toast.loading(`Simulating ${selectedGateway} Checkout...`, { id: 'intl_verify' });
+                            
+                            setTimeout(async () => {
+                              try {
+                                const verifyRes = await axios.post('/payments/verify', {
+                                  shipmentId: intlCheckoutShipment.id,
+                                  razorpay_order_id: intlCheckoutOrder.id,
+                                  razorpay_payment_id: `pay_${selectedGateway.toLowerCase()}_${Date.now()}`,
+                                  isMock: true,
+                                  gateway: selectedGateway
+                                });
+                                
+                                if (verifyRes.data.success) {
+                                  toast.success(`${selectedGateway} Payment Successful! Shipment Booked.`, { id: 'intl_verify' });
+                                  setIntlCheckoutOpen(false);
+                                  setPayingShipment(null);
+                                  fetchData();
+                                }
+                              } catch (err) {
+                                toast.error('Simulation payment checkout verification failed.', { id: 'intl_verify' });
+                              } finally {
+                                setSubmittingIntlPayment(false);
+                              }
+                            }, 1800);
+                          }}
+                          disabled={submittingIntlPayment}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-indigo-glow flex items-center justify-center space-x-2"
+                        >
+                          <span>{submittingIntlPayment ? 'Processing Securely...' : `Pay & Book via ${selectedGateway}`}</span>
+                        </button>
+
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* TAB: ANALYTICS */}
             {activeTab === 'analytics' && (
-              <div className="space-y-8 animate-fade-in">
-                <div>
-                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Spend & Logistics Analytics</h2>
-                  <p className="text-slate-500 text-sm mt-1">Detailed overview of your shipping patterns, expenses, and distribution.</p>
-                </div>
+              <div className="space-y-8 animate-fade-in text-left">
+                {/* CSS custom styles for map animation */}
+                <style>{`
+                  @keyframes pulseGlow {
+                    0%, 100% { transform: scale(1); opacity: 0.4; }
+                    50% { transform: scale(1.6); opacity: 0.8; }
+                  }
+                  @keyframes routeDash {
+                    to { stroke-dashoffset: -20; }
+                  }
+                  .animate-ping-glow {
+                    transform-origin: center;
+                    animation: pulseGlow 2s ease-in-out infinite;
+                  }
+                  .animate-route-dash {
+                    stroke-dasharray: 6 4;
+                    animation: routeDash 12s linear infinite;
+                  }
+                  .vessel-cargo-stack {
+                    background-image: repeating-linear-gradient(45deg, #1e293b 0px, #1e293b 2px, transparent 2px, transparent 8px);
+                  }
+                `}</style>
 
-                {/* Spend Trend Chart */}
-                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Monthly Spending Trend</h3>
-                    <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-bold">Last 6 Months</span>
+                {/* Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 gap-4">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                      <span>Marine Fleet Command & Analytics</span>
+                    </h2>
+                    <p className="text-slate-500 text-xs mt-1">Real-time ocean shipping routing progress, capacity utilization levels, and trade lane metrics.</p>
                   </div>
-                  <div className="h-72">
-                    {stats?.spendHistory && stats.spendHistory.some(h => h.amount > 0) ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={stats.spendHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2}/>
-                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                          <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
-                          <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(value) => `₹${value}`} />
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }}
-                            formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Spent']}
-                          />
-                          <Area type="monotone" dataKey="amount" stroke="#4f46e5" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSpend)" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center text-slate-400 text-xs italic">
-                        <span>No spend history logged yet.</span>
-                        <span className="text-[10px] text-slate-400 not-italic mt-1">Book and pay for a shipment to view your spending trend.</span>
-                      </div>
-                    )}
+                  <div className="flex items-center space-x-2 bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0">
+                    <Activity size={13} className="animate-pulse" />
+                    <span>Secure Satellite Link Active</span>
                   </div>
                 </div>
 
-                {/* Grid for distribution charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Main Interactive Row: Map & Telemetry Control */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                   
-                  {/* Shipping Channel Pie */}
-                  <div className="lg:col-span-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Shipping Channels</h3>
-                    <div className="h-64 flex items-center justify-center">
-                      {stats?.typeBreakdown && Object.values(stats.typeBreakdown).some(v => v > 0) ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={Object.keys(stats.typeBreakdown).map(key => ({ name: key, value: stats.typeBreakdown[key] }))}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={60}
-                              outerRadius={80}
-                              paddingAngle={3}
-                              dataKey="value"
-                            >
-                              {Object.keys(stats.typeBreakdown).map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                            <Legend verticalAlign="bottom" height={36} fontSize={11} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No shipments registered yet.</div>
-                      )}
+                  {/* Left Column: Interactive Map & Fleet Telemetry (8 Cols) */}
+                  <div className="xl:col-span-8 space-y-6">
+                    
+                    {/* Fleet Interactive Map Card */}
+                    <div className="bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl p-5 text-white space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-900 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
+                            <Compass size={16} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Interactive Global Trade Lanes Map</h4>
+                            <p className="text-[9px] text-slate-500">Click on any vessel marker to lock tracking transponder</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2 text-[9px] text-indigo-400 bg-indigo-950/60 border border-indigo-900/50 px-2 py-0.5 rounded font-bold uppercase">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+                          <span>Interactive</span>
+                        </div>
+                      </div>
+
+                      {/* Global Ocean SVG Map */}
+                      <div className="relative">
+                        <svg viewBox="0 0 800 320" className="w-full h-auto bg-slate-950 rounded-2xl border border-slate-900">
+                          {/* Grid Pattern */}
+                          <defs>
+                            <pattern id="map-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                              <circle cx="2" cy="2" r="1" fill="#334155" opacity="0.35" />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill="url(#map-grid)" />
+
+                          {/* Schematic continents representation */}
+                          <path d="M50 20 Q120 40 180 30 T240 60 T310 110 T350 150 L320 180 L290 120 Z" fill="#1e293b" opacity="0.15" />
+                          <path d="M410 140 L450 190 L480 200 L490 220 L510 200 L560 160 Z" fill="#1e293b" opacity="0.15" />
+                          <path d="M580 100 Q650 120 720 110 T780 180 L740 240 L690 220 Z" fill="#1e293b" opacity="0.15" />
+
+                          {/* Animated Dashed Sea Lanes */}
+                          <path d="M 450 180 Q 385 165 320 150" fill="none" stroke="#6366f1" strokeWidth="2.5" className="animate-route-dash" strokeLinecap="round" opacity="0.75" />
+                          <path d="M 490 210 Q 585 225 680 240" fill="none" stroke="#06b6d4" strokeWidth="2.5" className="animate-route-dash" strokeLinecap="round" opacity="0.75" />
+                          <path d="M 320 150 Q 200 100 80 50" fill="none" stroke="#8b5cf6" strokeWidth="2.5" className="animate-route-dash" strokeLinecap="round" opacity="0.75" />
+
+                          {/* Port Hub Points */}
+                          <circle cx="80" cy="50" r="4.5" fill="#ffffff" stroke="#8b5cf6" strokeWidth="2.5" />
+                          <text x="80" y="38" fill="#94a3b8" fontSize="8" font-weight="bold" text-anchor="middle">Rotterdam Port</text>
+                          
+                          <circle cx="320" cy="150" r="4.5" fill="#ffffff" stroke="#6366f1" strokeWidth="2.5" />
+                          <text x="320" y="138" fill="#94a3b8" fontSize="8" font-weight="bold" text-anchor="middle">Dubai Jebel Ali</text>
+                          
+                          <circle cx="450" cy="180" r="4.5" fill="#ffffff" stroke="#6366f1" strokeWidth="2.5" />
+                          <text x="450" y="195" fill="#94a3b8" fontSize="8" font-weight="bold" text-anchor="middle">Mumbai Port</text>
+                          
+                          <circle cx="490" cy="210" r="4.5" fill="#ffffff" stroke="#06b6d4" strokeWidth="2.5" />
+                          <text x="470" y="212" fill="#94a3b8" fontSize="8" font-weight="bold" text-anchor="end">Chennai Port</text>
+                          
+                          <circle cx="680" cy="240" r="4.5" fill="#ffffff" stroke="#06b6d4" strokeWidth="2.5" />
+                          <text x="680" y="255" fill="#94a3b8" fontSize="8" font-weight="bold" text-anchor="middle">Singapore Terminal</text>
+
+                          {/* Vessel Indicators */}
+                          <g className="cursor-pointer" onClick={() => setSelectedVessel('MV Blue Horizon')}>
+                            <circle cx="367" cy="161" r="12" fill="#6366f1" opacity={selectedVessel === 'MV Blue Horizon' ? '0.45' : '0.2'} className="animate-ping-glow" />
+                            <circle cx="367" cy="161" r="6" fill="#6366f1" stroke="#ffffff" strokeWidth="1.5" className={`transition-all duration-300 ${selectedVessel === 'MV Blue Horizon' ? 'scale-125' : ''}`} />
+                            <text x="367" y="148" fill={selectedVessel === 'MV Blue Horizon' ? '#818cf8' : '#e2e8f0'} fontSize="9" fontWeight="black" textAnchor="middle" className="transition-colors">Blue Horizon</text>
+                          </g>
+
+                          <g className="cursor-pointer" onClick={() => setSelectedVessel('MV Atlantic Clipper')}>
+                            <circle cx="646" cy="235" r="12" fill="#06b6d4" opacity={selectedVessel === 'MV Atlantic Clipper' ? '0.45' : '0.2'} className="animate-ping-glow" />
+                            <circle cx="646" cy="235" r="6" fill="#06b6d4" stroke="#ffffff" strokeWidth="1.5" className={`transition-all duration-300 ${selectedVessel === 'MV Atlantic Clipper' ? 'scale-125' : ''}`} />
+                            <text x="646" y="222" fill={selectedVessel === 'MV Atlantic Clipper' ? '#22d3ee' : '#e2e8f0'} fontSize="9" fontWeight="black" textAnchor="middle" className="transition-colors">Atlantic Clipper</text>
+                          </g>
+
+                          <g className="cursor-pointer" onClick={() => setSelectedVessel('MV Pacific Swift')}>
+                            <circle cx="270" cy="129" r="12" fill="#8b5cf6" opacity={selectedVessel === 'MV Pacific Swift' ? '0.45' : '0.2'} className="animate-ping-glow" />
+                            <circle cx="270" cy="129" r="6" fill="#8b5cf6" stroke="#ffffff" strokeWidth="1.5" className={`transition-all duration-300 ${selectedVessel === 'MV Pacific Swift' ? 'scale-125' : ''}`} />
+                            <text x="270" y="116" fill={selectedVessel === 'MV Pacific Swift' ? '#c084fc' : '#e2e8f0'} fontSize="9" fontWeight="black" textAnchor="middle" className="transition-colors">Pacific Swift</text>
+                          </g>
+                        </svg>
+
+                        {/* Map Overlay info */}
+                        <div className="absolute bottom-3 left-3 bg-slate-900/85 backdrop-blur-md border border-slate-800 p-2.5 rounded-xl text-[9px] text-slate-400 space-y-1">
+                          <span className="font-extrabold uppercase text-slate-300 block mb-1">Fleet Legend</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            <span>Mumbai-Dubai Channel (64% complete)</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
+                            <span>Chennai-Singapore Channel (82% complete)</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                            <span>Dubai-Rotterdam Channel (21% complete)</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Fleet Telemetry Control Panel */}
+                    <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-left transition-all">
+                      {/* Vessel Header */}
+                      <div className="bg-slate-50 border-b border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center space-x-3.5">
+                          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100">
+                            <Ship size={20} />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-base font-black text-slate-800 leading-tight">{VESSEL_DATA[selectedVessel].name}</h3>
+                              <span className={`px-2 py-0.5 text-[9px] font-bold border rounded uppercase ${VESSEL_DATA[selectedVessel].statusColor}`}>
+                                {VESSEL_DATA[selectedVessel].status}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                              {VESSEL_DATA[selectedVessel].imo} • CALL SIGN: {VESSEL_DATA[selectedVessel].callSign} • Flag: {VESSEL_DATA[selectedVessel].flag}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Interactive ping actions */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTransponderStatus('pinging');
+                              toast.loading(`Pinging transponder for ${selectedVessel}...`, { id: 'ping' });
+                              setTimeout(() => {
+                                setTransponderStatus('completed');
+                                toast.success(`📡 Transponder Response: ${selectedVessel} online. Ping: 38ms. Coordinates verified.`, { id: 'ping' });
+                                const now = new Date();
+                                const timeStr = now.toTimeString().split(' ')[0];
+                                setAisLogs(prev => [
+                                  { time: timeStr, tag: 'AIS', msg: `Transponder ping SUCCESS for ${selectedVessel} - Sat: ORION-4 (Lat: ${VESSEL_DATA[selectedVessel].coordinates.split(' ')[0]})` },
+                                  ...prev
+                                ]);
+                              }, 1800);
+                            }}
+                            disabled={transponderStatus === 'pinging'}
+                            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition duration-150 flex items-center space-x-1.5 ${
+                              transponderStatus === 'pinging'
+                                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                : 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-sm'
+                            }`}
+                          >
+                            <span>📡 {transponderStatus === 'pinging' ? 'Pinging...' : 'Ping Transponder'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEtaRecalculating(true);
+                              toast.loading('Analyzing current weather patterns and oceanic wind gradients...', { id: 'eta' });
+                              setTimeout(() => {
+                                setEtaRecalculating(false);
+                                toast.success(`ETA Recalculated: ${selectedVessel} schedule optimized. No delays expected.`, { id: 'eta' });
+                              }, 1500);
+                            }}
+                            disabled={etaRecalculating}
+                            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold rounded-xl text-[10px] transition"
+                          >
+                            {etaRecalculating ? 'Calculating...' : 'Recalculate ETA'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Grid parameters */}
+                      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        {/* Left: Telemetry Readings */}
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1.5">Live Telemetry Readings</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Active Sea Coordinates</span>
+                              <span className="text-xs font-bold text-slate-700 block mt-0.5 font-mono">{VESSEL_DATA[selectedVessel].coordinates}</span>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Hull Draft Depth</span>
+                              <span className="text-xs font-bold text-slate-700 block mt-0.5 font-mono">{VESSEL_DATA[selectedVessel].draftDepth} meters</span>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Telemetry Route ETA</span>
+                              <span className="text-xs font-black text-indigo-600 block mt-0.5 font-mono">{VESSEL_DATA[selectedVessel].eta}</span>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Propulsion Speed</span>
+                              <span className="text-xs font-bold text-emerald-600 block mt-0.5 font-mono">{VESSEL_DATA[selectedVessel].speed}</span>
+                            </div>
+                          </div>
+
+                          {/* Engine stats bars */}
+                          <div className="space-y-2.5 pt-2">
+                            <div>
+                              <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase">
+                                <span>Engine Core Temperature</span>
+                                <span className="font-mono text-slate-600">{VESSEL_DATA[selectedVessel].engineTemp}°C / 95°C Max</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-1000 ${VESSEL_DATA[selectedVessel].engineTemp > 83 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                                  style={{ width: `${(VESSEL_DATA[selectedVessel].engineTemp / 95) * 100}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase">
+                                <span>Remaining Marine Fuel Capacity</span>
+                                <span className="font-mono text-slate-600">{VESSEL_DATA[selectedVessel].fuelLevel}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-1000 ${VESSEL_DATA[selectedVessel].fuelLevel < 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                  style={{ width: `${VESSEL_DATA[selectedVessel].fuelLevel}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: Cargo Manifest & Port Clearances */}
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1.5">Cargo Manifest deck Load</h4>
+
+                          {/* Visual Cargo Deck stack */}
+                          <div className="p-3 bg-slate-900 rounded-2xl space-y-3 border border-slate-800 text-white">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="font-extrabold uppercase text-slate-400 tracking-wider">Container Stack Allocation</span>
+                              <span className="font-mono text-indigo-400 font-extrabold">{VESSEL_DATA[selectedVessel].cargo} Load</span>
+                            </div>
+                            
+                            {/* Stack Bar */}
+                            <div className="h-6 w-full rounded-lg overflow-hidden flex border border-slate-800 shadow-inner">
+                              {VESSEL_DATA[selectedVessel].cargoDistribution.map((cargo, cIdx) => (
+                                <div 
+                                  key={cIdx} 
+                                  className={`${cargo.color} h-full transition-all duration-1000 flex items-center justify-center text-[8px] font-black text-white`}
+                                  style={{ width: `${cargo.value}%` }}
+                                  title={`${cargo.name}: ${cargo.value}%`}
+                                >
+                                  {cargo.value > 15 ? `${cargo.value}%` : ''}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Legend */}
+                            <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-400">
+                              {VESSEL_DATA[selectedVessel].cargoDistribution.map((cargo, cIdx) => (
+                                <div key={cIdx} className="flex items-center space-x-1.5">
+                                  <span className={`w-2 h-2 rounded ${cargo.color}`}></span>
+                                  <span className="truncate">{cargo.name} ({cargo.value}%)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Port Clearances Checkbox telemetry */}
+                          <div className="space-y-2 bg-slate-50 border border-slate-150 p-3 rounded-2xl text-[10px] text-slate-600">
+                            <span className="font-bold text-slate-400 uppercase block mb-1">Pre-Arrival Port Clearances</span>
+                            <div className="flex justify-between items-center border-b border-slate-100/50 pb-1.5">
+                              <span className="font-semibold">Customs Manifest Declaration KYC</span>
+                              <span className="text-emerald-600 font-black flex items-center gap-1">✓ PASSED</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-slate-100/50 pb-1.5">
+                              <span className="font-semibold">Quay Terminal Reservation</span>
+                              <span className="text-emerald-600 font-black flex items-center gap-1">✓ SECURED</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold">Harbor Pilot & Tug Boat Dispatch</span>
+                              <span className="text-amber-600 font-black flex items-center gap-1">⏱ PENDING APPROACH</span>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
                   </div>
 
-                  {/* Consignment Status Bar */}
-                  <div className="lg:col-span-6 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Consignment Lifecycle States</h3>
-                    <div className="h-64">
-                      {stats?.statusBreakdown && Object.values(stats.statusBreakdown).some(v => v > 0) ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={Object.keys(stats.statusBreakdown).map(key => ({ name: key, count: stats.statusBreakdown[key] }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
-                            <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
-                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                            <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]}>
-                              {Object.keys(stats.statusBreakdown).map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">No status history logged yet.</div>
-                      )}
+                  {/* Right Column: AIS Live Telemetry Logs & Capacity Gauges (4 Cols) */}
+                  <div className="xl:col-span-4 space-y-6">
+                    
+                    {/* Live AIS Telemetry Stream Terminal */}
+                    <div className="bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl p-5 text-white h-[320px] flex flex-col justify-between">
+                      <div className="flex items-center justify-between border-b border-slate-900 pb-2.5">
+                        <div className="flex items-center space-x-2 text-indigo-400">
+                          <Activity size={14} className="animate-pulse" />
+                          <h4 className="text-xs font-black uppercase tracking-wider">AIS Telemetry Stream</h4>
+                        </div>
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                      </div>
+
+                      {/* Log Screen */}
+                      <div className="flex-1 my-3 overflow-y-auto space-y-2.5 pr-1 font-mono text-[9px] leading-normal text-left scrollbar-thin scrollbar-thumb-slate-800">
+                        {aisLogs.map((log, idx) => (
+                          <div key={idx} className="border-b border-slate-900/60 pb-1.5">
+                            <span className="text-slate-500">[{log.time}]</span>{' '}
+                            <span className={`px-1.5 py-0.2 rounded-[3px] text-[8px] font-black uppercase inline-block mr-1.5 ${
+                              log.tag === 'AIS' ? 'bg-indigo-950 text-indigo-400 border border-indigo-900/50' :
+                              log.tag === 'MET' ? 'bg-amber-950 text-amber-400 border border-amber-900/50' :
+                              log.tag === 'PORT' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/50' :
+                              'bg-purple-950 text-purple-400 border border-purple-900/50'
+                            }`}>
+                              {log.tag}
+                            </span>
+                            <span className="text-slate-300">{log.msg}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="text-[8px] text-slate-500 font-mono text-center border-t border-slate-900 pt-2 font-bold uppercase tracking-wider">
+                        SECURE AES-256 SATELLITE ENCRYPTION LOGS
+                      </div>
                     </div>
+
+                    {/* Interactive Telemetry Resource Capacity Gauges */}
+                    <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm text-left space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">Terminal Resource Capacity</h4>
+                        <span className="text-[9px] font-bold text-slate-400">Click to detail</span>
+                      </div>
+
+                      {/* Three Horizontal gauges */}
+                      <div className="space-y-4">
+                        
+                        {/* Terminal yard capacity */}
+                        <div 
+                          onClick={() => setActiveGaugeDetail(activeGaugeDetail === 'terminal' ? null : 'terminal')}
+                          className={`p-3 border rounded-2xl cursor-pointer transition-all duration-150 ${
+                            activeGaugeDetail === 'terminal' ? 'bg-indigo-50/50 border-indigo-300 shadow-sm' : 'bg-slate-50 hover:bg-slate-100/50 border-slate-150'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                              <Anchor size={13} className="text-indigo-600" />
+                              Yard Capacity
+                            </span>
+                            <span className="font-mono font-black text-indigo-600">74%</span>
+                          </div>
+                          <div className="h-2 w-full bg-slate-200 rounded-full mt-2 overflow-hidden border border-slate-300/30">
+                            <div className="h-full bg-indigo-600 rounded-full" style={{ width: '74%' }}></div>
+                          </div>
+                          
+                          {activeGaugeDetail === 'terminal' && (
+                            <div className="mt-2.5 pt-2 border-t border-indigo-200/50 text-[10px] text-slate-600 space-y-1 animate-fade-in leading-relaxed">
+                              <div className="flex justify-between font-medium">
+                                <span>Dry Container Slots Open:</span>
+                                <span className="font-bold text-slate-800">1,240 TEU</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Reefer Cargo Outlets Connected:</span>
+                                <span className="font-bold text-slate-800">82% utilization</span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 italic mt-1">Terminal yard congestion index: 2.1 (Low delay forecast).</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Deck Load Gauge */}
+                        <div 
+                          onClick={() => setActiveGaugeDetail(activeGaugeDetail === 'deck' ? null : 'deck')}
+                          className={`p-3 border rounded-2xl cursor-pointer transition-all duration-150 ${
+                            activeGaugeDetail === 'deck' ? 'bg-emerald-50/50 border-emerald-300 shadow-sm' : 'bg-slate-50 hover:bg-slate-100/50 border-slate-150'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                              <Ship size={13} className="text-emerald-600" />
+                              Fleet Cargo Weight
+                            </span>
+                            <span className="font-mono font-black text-emerald-600">89%</span>
+                          </div>
+                          <div className="h-2 w-full bg-slate-200 rounded-full mt-2 overflow-hidden border border-slate-300/30">
+                            <div className="h-full bg-emerald-600 rounded-full" style={{ width: '89%' }}></div>
+                          </div>
+                          
+                          {activeGaugeDetail === 'deck' && (
+                            <div className="mt-2.5 pt-2 border-t border-emerald-200/50 text-[10px] text-slate-600 space-y-1 animate-fade-in leading-relaxed">
+                              <div className="flex justify-between font-medium">
+                                <span>Active Cargo Load Weight:</span>
+                                <span className="font-bold text-slate-800">22,250 Metric Tons</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Free Cargo Capacity Remaining:</span>
+                                <span className="font-bold text-slate-800">2,750 Metric Tons</span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 italic mt-1">Vessel draft compliance: 100% verified by port authority.</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Eco Green Index */}
+                        <div 
+                          onClick={() => setActiveGaugeDetail(activeGaugeDetail === 'eco' ? null : 'eco')}
+                          className={`p-3 border rounded-2xl cursor-pointer transition-all duration-150 ${
+                            activeGaugeDetail === 'eco' ? 'bg-teal-50/50 border-teal-300 shadow-sm' : 'bg-slate-50 hover:bg-slate-100/50 border-slate-150'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                              <Globe size={13} className="text-teal-600" />
+                              Eco-Routing Index
+                            </span>
+                            <span className="font-mono font-black text-teal-600">92%</span>
+                          </div>
+                          <div className="h-2 w-full bg-slate-200 rounded-full mt-2 overflow-hidden border border-slate-300/30">
+                            <div className="h-full bg-teal-600 rounded-full" style={{ width: '92%' }}></div>
+                          </div>
+                          
+                          {activeGaugeDetail === 'eco' && (
+                            <div className="mt-2.5 pt-2 border-t border-teal-200/50 text-[10px] text-slate-600 space-y-1 animate-fade-in leading-relaxed">
+                              <div className="flex justify-between font-medium">
+                                <span>CO2 Emissions Prevented:</span>
+                                <span className="font-bold text-teal-600">1,248 kg carbon offset</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Optimal Flow Speed Factor:</span>
+                                <span className="font-bold text-teal-600">96.4% compliance</span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 italic mt-1">Routing optimization has saved equivalent of 52 mature trees this cycle.</p>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+
                   </div>
 
                 </div>
+
+                {/* Major Ocean Channels & Logistics leaderboard */}
+                <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">Oceanic Transit Channel Performance</h3>
+                      <p className="text-[10px] text-slate-400">Weekly performance and congestion tracking on major trade lanes</p>
+                    </div>
+                    <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-600 px-2.5 py-1 rounded-md font-bold uppercase">Sea-lanes registry</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                          <th className="pb-3.5">Ocean Transit Channel</th>
+                          <th className="pb-3.5">TEU Allocation Capacity</th>
+                          <th className="pb-3.5">Mean Transit Speed</th>
+                          <th className="pb-3.5">Departure Freq.</th>
+                          <th className="pb-3.5">Lane Congestion Rating</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                        <tr className="hover:bg-slate-50/40">
+                          <td className="py-3.5 font-bold text-slate-800">Mumbai Port (IN) ➔ Dubai Port (UAE)</td>
+                          <td className="py-3.5">14,200 TEU</td>
+                          <td className="py-3.5 font-mono text-indigo-600">22.4 kn average</td>
+                          <td className="py-3.5">4 vessels / week</td>
+                          <td className="py-3.5">
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OPTIMAL RANGE</span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/40">
+                          <td className="py-3.5 font-bold text-slate-800">Cochin Terminal (IN) ➔ Singapore Port (SG)</td>
+                          <td className="py-3.5">18,500 TEU</td>
+                          <td className="py-3.5 font-mono text-indigo-600">19.5 kn average</td>
+                          <td className="py-3.5">3 vessels / week</td>
+                          <td className="py-3.5">
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">OPTIMAL RANGE</span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/40">
+                          <td className="py-3.5 font-bold text-slate-800">Chennai Port (IN) ➔ Rotterdam Terminal (NL)</td>
+                          <td className="py-3.5">22,000 TEU</td>
+                          <td className="py-3.5 font-mono text-indigo-600">18.2 kn average</td>
+                          <td className="py-3.5 font-normal text-slate-400">Bi-weekly dispatch</td>
+                          <td className="py-3.5">
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">MODERATE CLOG (+1.2d)</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
               </div>
             )}
 
@@ -1240,6 +2416,37 @@ const CustomerDashboard = () => {
                         <Package size={12} className="text-indigo-500" />
                         <span>Content Details</span>
                       </label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-semibold text-slate-400 mb-1">Consignment Category</label>
+                          <select 
+                            value={consignmentCategory} 
+                            onChange={(e) => setConsignmentCategory(e.target.value)} 
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                          >
+                            <option value="Parcel">Apparel & Cloth</option>
+                            <option value="Documents">Documents</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Books">Books & Printed Matter</option>
+                            <option value="Household">Household / Personal Items</option>
+                            <option value="Medicine">Medicine & Pharma</option>
+                            <option value="Other">Other Category</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-semibold text-slate-400 mb-1">
+                            Declared Parcel Value ({getCurrencySymbol(getCurrencyForCountries(originCountry, destinationCountry))})
+                          </label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            value={declaredValue} 
+                            onChange={(e) => setDeclaredValue(e.target.value)} 
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                            required 
+                          />
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-[9px] font-semibold text-slate-400 mb-1">Item Description / Contents</label>
                         <input type="text" placeholder="e.g. Cotton clothing, Documents, Metal keychains, etc." value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
@@ -1258,6 +2465,24 @@ const CustomerDashboard = () => {
                           </span>
                         </div>
                       )}
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center space-x-1">
+                        <Clock size={12} className="text-indigo-500" />
+                        <span>Schedule Pickup</span>
+                      </label>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-slate-400 mb-1">Pickup Date & Time (Future Date)</label>
+                        <input 
+                          type="datetime-local" 
+                          value={pickupDate} 
+                          onChange={(e) => setPickupDate(e.target.value)} 
+                          min={new Date().toISOString().slice(0, 16)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                          required 
+                        />
+                      </div>
                     </div>
 
                     <div className="border-t border-slate-100 pt-4 space-y-3">
@@ -1285,8 +2510,8 @@ const CustomerDashboard = () => {
                         <textarea placeholder="Full delivery address..." rows="3" value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" required></textarea>
                       </div>
                     </div>
-
-                    {(originCountry !== 'India' || destinationCountry !== 'India') && (
+                     {/* KYC Conditions & Security Fields depending on Domestic vs International */}
+                    {(originCountry !== 'India' || destinationCountry !== 'India') ? (
                       <div className="border-t border-slate-100 pt-4 space-y-3">
                         <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl space-y-3">
                           <h5 className="text-xs font-bold text-indigo-800 flex items-center space-x-1.5">
@@ -1301,14 +2526,70 @@ const CustomerDashboard = () => {
                           </ul>
                         </div>
                         
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1">
+                              <Shield size={12} className="text-indigo-500" />
+                              <span>Passport / Customs ID Number</span>
+                            </label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Passport Number, SSN, EIN" 
+                              value={govtIdProof} 
+                              onChange={(e) => setGovtIdProof(e.target.value)} 
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                              required 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1">
+                              <Phone size={12} className="text-indigo-500" />
+                              <span>Recipient Phone (Intl)</span>
+                            </label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. +1 555-0199" 
+                              value={recipientPhone} 
+                              onChange={(e) => setRecipientPhone(e.target.value)} 
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                              required 
+                            />
+                          </div>
+                        </div>
                         <div>
                           <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1">
-                            <Shield size={12} className="text-indigo-500" />
-                            <span>Passport / Government ID Number</span>
+                            <ClipboardList size={12} className="text-indigo-500" />
+                            <span>Customs Declaration (Items Description)</span>
+                          </label>
+                          <textarea 
+                            placeholder="Provide a detailed list of items being shipped (e.g. 2 cotton shirts, 1 set of headphones, etc.)" 
+                            rows="2"
+                            value={customsDescription} 
+                            onChange={(e) => setCustomsDescription(e.target.value)} 
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                            required 
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-t border-slate-100 pt-4 space-y-3">
+                        <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-xl space-y-2">
+                          <h5 className="text-xs font-bold text-emerald-800 flex items-center space-x-1.5">
+                            <Shield size={14} className="text-emerald-600" />
+                            <span>Domestic Security Regulations</span>
+                          </h5>
+                          <p className="text-[11px] text-emerald-700/90 leading-relaxed">
+                            Under domestic cargo transport acts, all parcels are scanned at airports and transit hubs. Please supply Aadhaar/PAN details for verification.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1">
+                            <User size={12} className="text-indigo-500" />
+                            <span>Aadhaar Number / PAN Card / GSTIN</span>
                           </label>
                           <input 
                             type="text" 
-                            placeholder="Enter ID Number (e.g. Passport Number, SSN, National ID)" 
+                            placeholder="Enter 12-digit Aadhaar, 10-digit PAN or GSTIN" 
                             value={govtIdProof} 
                             onChange={(e) => setGovtIdProof(e.target.value)} 
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
@@ -1342,14 +2623,14 @@ const CustomerDashboard = () => {
                   </div>
 
                   {/* Estimated Cost Card */}
-                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in">
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in text-left">
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
                       <Coins size={14} className="text-emerald-600" />
                       <span>Estimated Cost Quote</span>
                     </h4>
                     <div className="text-center py-4 space-y-2">
                       <span className="block text-3xl font-black text-emerald-600">
-                        ₹{(() => {
+                        {(() => {
                           const basePrice = rates.base_fare || 150.0;
                           const perKgRate = rates.per_kg_fare || 50.0;
                           const taxPercent = rates.tax_rate || 18.0;
@@ -1361,12 +2642,22 @@ const CustomerDashboard = () => {
                           
                           let intlSurcharge = 1.0;
                           if (originCountry !== 'India' || destinationCountry !== 'India') {
-                            intlSurcharge = 1.8; // 80% surcharge for international shipping
+                            intlSurcharge = 1.8;
                           }
                           const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier * intlSurcharge;
-                          const cost = costBeforeTax * (1 + (taxPercent / 100));
-                          return Math.round(cost * 100) / 100;
-                        })().toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          const costInINR = costBeforeTax * (1 + (taxPercent / 100));
+
+                          const cur = getCurrencyForCountries(originCountry, destinationCountry);
+                          const sym = getCurrencySymbol(cur);
+                          let conv = 1.0;
+                          if (cur === 'USD') conv = 0.012;
+                          else if (cur === 'GBP') conv = 0.0095;
+                          else if (cur === 'AED') conv = 0.044;
+                          else if (cur === 'AUD') conv = 0.018;
+
+                          const cost = costInINR * conv;
+                          return `${sym} ${Number(cost).toFixed(2)}`;
+                        })()}
                       </span>
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
                         Includes GST ({rates.tax_rate || 18}%) & Service factors
@@ -1584,7 +2875,7 @@ const CustomerDashboard = () => {
                             <td className="py-3.5 font-bold text-slate-800">{invoice.invoiceNumber}</td>
                             <td className="py-3.5 text-slate-400">{new Date(invoice.createdAt).toLocaleDateString()}</td>
                             <td className="py-3.5 text-slate-500 font-mono text-[10px]">{invoice.paymentId}</td>
-                            <td className="py-3.5 font-bold text-emerald-600">₹{Number(invoice.amount || 0).toFixed(2)}</td>
+                            <td className="py-3.5 font-bold text-emerald-600">{getCurrencySymbol(invoice.currency)} {Number(invoice.amount || 0).toFixed(2)}</td>
                             <td className="py-3.5 text-right">
                               <button
                                 onClick={() => handleDownloadInvoice(invoice.invoiceNumber)}

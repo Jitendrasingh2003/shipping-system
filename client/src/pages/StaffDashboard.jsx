@@ -6,8 +6,11 @@ import axios from 'axios';
 import { 
   Package, MapPin, CheckCircle, Clock, LogOut, RefreshCw, Send,
   Truck, ClipboardList, User, Award, Shield, ChevronRight, Activity, Calendar, Phone, MapPinIcon,
-  Layers, Warehouse, Map, Compass, Globe, QrCode, Camera, Bug
+  Layers, Warehouse, Map, Compass, Globe, QrCode, Camera, Bug, Star
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
 import toast from 'react-hot-toast';
 
 const STATUS_PIPELINE = ['Booked', 'Picked up', 'In Transit', 'Out for Delivery', 'Delivered'];
@@ -80,10 +83,11 @@ const StaffDashboard = () => {
     return dict[lang][key] || key;
   };
 
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'active' | 'transit' | 'history' | 'profile' | 'warehouses' | 'fleet'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'tasks' | 'active' | 'transit' | 'history' | 'profile' | 'warehouses' | 'fleet'
   const [stats, setStats] = useState(null);
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deliveryPhoto, setDeliveryPhoto] = useState(null);
   
   // Tracking & Telemetry States
   const [selectedTransitShipment, setSelectedTransitShipment] = useState(null);
@@ -95,6 +99,7 @@ const StaffDashboard = () => {
   
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
+  const [shipmentFilter, setShipmentFilter] = useState('all'); // 'all' | 'domestic' | 'international'
   
   // Update Status Modal State
   const [statusModal, setStatusModal] = useState(false);
@@ -102,6 +107,7 @@ const StaffDashboard = () => {
   const [newStatus, setNewStatus] = useState('');
   const [currentLocation, setCurrentLocation] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [otp, setOtp] = useState('');
   const [qrModal, setQrModal] = useState(false);
   const [scannedTrackingId, setScannedTrackingId] = useState('');
   const canvasRef = useRef(null);
@@ -119,6 +125,16 @@ const StaffDashboard = () => {
     const reader = new FileReader();
     reader.onloadend = () => {
       setBugScreenshot(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeliveryPhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setDeliveryPhoto(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -437,16 +453,25 @@ const StaffDashboard = () => {
 
     setUpdating(true);
     try {
+      if (newStatus === 'Delivered' && deliveryPhoto) {
+        await axios.post(`/shipments/${selectedShipment.id}/delivery-photo`, {
+          photoBase64: deliveryPhoto
+        });
+      }
+
       const res = await axios.put(`/shipments/${selectedShipment.id}/status`, {
         status: newStatus,
         location: currentLocation.trim(),
-        signature
+        signature,
+        otp: newStatus === 'Delivered' ? otp.trim() : undefined
       });
       if (res.data.success) {
         toast.success(`Shipment status updated to: ${newStatus}`);
         setStatusModal(false);
         setNewStatus('');
         setCurrentLocation('');
+        setDeliveryPhoto(null);
+        setOtp('');
         fetchData();
       }
     } catch (err) {
@@ -468,6 +493,8 @@ const StaffDashboard = () => {
     setSelectedShipment(shipment);
     setNewStatus(getNextStatus(shipment.status));
     setCurrentLocation(shipment.history?.[shipment.history.length - 1]?.location || '');
+    setDeliveryPhoto(null);
+    setOtp('');
     setStatusModal(true);
   };
 
@@ -483,11 +510,19 @@ const StaffDashboard = () => {
   const activeDeliveries = shipments.filter(s => s.status !== 'Delivered' && s.status !== 'Cancelled' && s.status !== 'Pending Payment');
   const historyDeliveries = shipments.filter(s => s.status === 'Delivered' || s.status === 'Cancelled');
 
-  const filteredActive = activeDeliveries.filter(s => 
-    s.trackingId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.recipientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.destinationCity.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredActive = activeDeliveries.filter(s => {
+    const matchesSearch = 
+      s.trackingId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.recipientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.destinationCity.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    const isDomestic = (s.originCountry || 'India') === 'India' && (s.destinationCountry || 'India') === 'India';
+    if (shipmentFilter === 'domestic') return isDomestic;
+    if (shipmentFilter === 'international') return !isDomestic;
+    return true;
+  });
 
   // Success rate calculator
   const totalAssigned = stats?.totalAssigned || 0;
@@ -526,11 +561,12 @@ const StaffDashboard = () => {
           {/* Navigation Links */}
           <nav className="space-y-1">
             {[
-              { id: 'dashboard', label: t('myDashboard'), icon: ClipboardList },
-              { id: 'active', label: t('activeDeliveriesTab'), icon: Truck, count: activeDeliveries.length },
+              { id: 'dashboard', label: t('myDashboard'), icon: Activity },
+              { id: 'tasks', label: 'Daily Task List', icon: ClipboardList, count: activeDeliveries.length },
+              { id: 'active', label: t('activeDeliveriesTab'), icon: Truck },
               { id: 'transit', label: t('liveTransitTracker'), icon: Map },
               { id: 'warehouses', label: t('warehouseInventory'), icon: Layers },
-              { id: 'fleet', label: t('fleetVehicles'), icon: Truck },
+              { id: 'fleet', label: t('fleetVehicles'), icon: Compass },
               { id: 'history', label: t('completedHistory'), icon: Clock },
               { id: 'profile', label: t('operatorProfile'), icon: User }
             ].map(tab => {
@@ -595,6 +631,7 @@ const StaffDashboard = () => {
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight capitalize">
               {activeTab === 'dashboard' && t('opsDashboard')}
+              {activeTab === 'tasks' && 'Daily Task List'}
               {activeTab === 'active' && t('activeDeliveriesTitle')}
               {activeTab === 'transit' && t('liveTransitTitle')}
               {activeTab === 'warehouses' && t('warehouseInventoryTitle')}
@@ -604,6 +641,7 @@ const StaffDashboard = () => {
             </h1>
             <p className="text-slate-500 text-xs mt-1">
               {activeTab === 'dashboard' && t('dashboardDesc')}
+              {activeTab === 'tasks' && 'Check off your assigned shipments by pipeline order and perform quick actions.'}
               {activeTab === 'active' && t('activeDesc')}
               {activeTab === 'transit' && t('transitDesc')}
               {activeTab === 'warehouses' && t('warehousesDesc')}
@@ -763,6 +801,123 @@ const StaffDashboard = () => {
           </div>
         )}
 
+        {/* TAB: DAILY TASK LIST */}
+        {activeTab === 'tasks' && (() => {
+          // Sort shipments by pipeline: Booked -> Picked up -> In Transit -> Out for Delivery
+          // If status is Delivered or Cancelled, exclude it.
+          const activeTasks = shipments.filter(s => s.status !== 'Delivered' && s.status !== 'Cancelled' && s.status !== 'Pending Payment');
+          const orderedTasks = [...activeTasks].sort((a, b) => {
+            const indexA = STATUS_PIPELINE.indexOf(a.status);
+            const indexB = STATUS_PIPELINE.indexOf(b.status);
+            return indexA - indexB;
+          });
+
+          return (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Assigned Delivery Task Checklist</h3>
+                  <p className="text-xs text-slate-500 mt-1">Check off tasks as you advance each package through the shipping pipeline.</p>
+                </div>
+                <div className="bg-indigo-50 text-indigo-700 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-indigo-100 flex items-center gap-1.5 shrink-0">
+                  <span className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></span>
+                  <span>{orderedTasks.length} Pending Tasks</span>
+                </div>
+              </div>
+
+              {orderedTasks.length === 0 ? (
+                <div className="bg-white border border-slate-200 p-12 rounded-3xl text-center text-slate-400 italic">
+                  No pending delivery tasks assigned. All caught up!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {orderedTasks.map(task => {
+                    const nextStatus = getNextStatus(task.status);
+                    const currentIdx = STATUS_PIPELINE.indexOf(task.status);
+                    
+                    return (
+                      <div key={task.id} className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition flex flex-col justify-between space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-mono font-bold text-indigo-600 flex items-center gap-1">
+                              {((task.originCountry || 'India') !== 'India' || (task.destinationCountry || 'India') !== 'India') && (
+                                <span className="text-indigo-600 font-bold" title={`International: ${task.originCountry} → ${task.destinationCountry}`}>🌐</span>
+                              )}
+                              <span>{task.trackingId}</span>
+                            </span>
+                            {task.govtIdProof && (
+                              <span className="block text-[9px] text-slate-400 font-extrabold bg-slate-100 border border-slate-200 px-1 py-0.5 rounded w-max mt-0.5">
+                                ID: {task.govtIdProof}
+                              </span>
+                            )}
+                            <h4 className="text-xs font-bold text-slate-800">To: {task.recipientName}</h4>
+                            <p className="text-[10px] text-slate-500">{task.originCity} ➔ {task.destinationCity}</p>
+                            {task.pickupDate && (
+                              <p className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                                <Calendar size={10} />
+                                <span>Pickup: {new Date(task.pickupDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                              </p>
+                            )}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                            task.status === 'Booked' ? 'bg-slate-50 text-slate-600 border-slate-200' :
+                            task.status === 'Picked up' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            task.status === 'In Transit' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                            'bg-cyan-50 text-cyan-700 border-cyan-200 animate-pulse'
+                          }`}>
+                            {task.status}
+                          </span>
+                        </div>
+
+                        {/* Pipeline Step Tracker */}
+                        <div className="relative pt-1">
+                          <div className="flex mb-2 items-center justify-between text-[10px]">
+                            <span className="text-slate-400">Pipeline Progress</span>
+                            <span className="font-bold text-indigo-600">{Math.round((currentIdx / 4) * 100)}%</span>
+                          </div>
+                          <div className="overflow-hidden h-1.5 text-xs flex rounded bg-slate-100">
+                            <div 
+                              style={{ width: `${(currentIdx / 4) * 100}%` }}
+                              className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500"
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                          <div className="text-[9px] text-slate-400 font-semibold">
+                            Type: <span className="text-slate-600 font-bold">{task.shipmentType}</span>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => {
+                                setSelectedTransitShipment(task);
+                                setTrackingLogs([...task.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+                                setActiveTab('transit');
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-semibold transition"
+                            >
+                              Track
+                            </button>
+                            {task.status !== 'Delivered' && (
+                              <button
+                                onClick={() => openStatusUpdate(task)}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold shadow-sm transition flex items-center space-x-1"
+                              >
+                                <span>Advance: {nextStatus}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* TAB 2: ACTIVE DELIVERIES */}
         {activeTab === 'active' && (
           <div className="space-y-6 animate-fade-in">
@@ -795,6 +950,42 @@ const StaffDashboard = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full max-w-md">
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('all')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'all'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                All Assigned
+              </button>
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('domestic')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'domestic'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Domestic 🇮🇳
+              </button>
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('international')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'international'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                International 🌐
+              </button>
+            </div>
+
             {/* Cargo Cards Grid */}
             {filteredActive.length === 0 ? (
               <div className="premium-card p-10 rounded-2xl text-center text-slate-400 italic">
@@ -808,7 +999,17 @@ const StaffDashboard = () => {
                     {/* Card Header */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-indigo-600 block">{s.trackingId}</span>
+                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
+                          {((s.originCountry || 'India') !== 'India' || (s.destinationCountry || 'India') !== 'India') && (
+                            <span className="text-indigo-600 font-bold" title={`International: ${s.originCountry} → ${s.destinationCountry}`}>🌐</span>
+                          )}
+                          <span>{s.trackingId}</span>
+                        </span>
+                        {s.govtIdProof && (
+                          <span className="block text-[9px] text-slate-400 font-extrabold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded w-max mt-0.5">
+                            ID: {s.govtIdProof}
+                          </span>
+                        )}
                         <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{s.shipmentType} Shipping</span>
                       </div>
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 flex items-center space-x-1">
@@ -850,20 +1051,51 @@ const StaffDashboard = () => {
                           <MapPin size={10} className="inline mr-1 text-slate-400" />
                           {s.recipientAddress}
                         </p>
+                        {s.customsDescription && (
+                          <div className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100/50 p-2 rounded-lg font-medium leading-relaxed mt-1">
+                            <strong>Customs:</strong> {s.customsDescription}
+                          </div>
+                        )}
                       </div>
 
                       {/* Cargo parameters */}
-                      <div className="grid grid-cols-2 gap-4 text-[10px] text-slate-500 font-semibold border-t border-slate-100 pt-3">
+                      <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px] text-slate-500 font-semibold border-t border-slate-100 pt-3">
                         <div>
                           <span>Parcel Weight: </span>
                           <span className="text-slate-700 font-bold">{s.weight} kg</span>
                         </div>
                         <div className="text-right">
-                          <span>Last Location: </span>
+                          <span>Category: </span>
+                          <span className="text-slate-700 font-bold">{s.consignmentCategory || 'Parcel'}</span>
+                        </div>
+                        <div>
+                          <span>Scheduled Pickup: </span>
                           <span className="text-indigo-600 font-bold">
-                            {s.history?.[s.history.length - 1]?.location || 'N/A'}
+                            {s.pickupDate ? new Date(s.pickupDate).toLocaleDateString() : 'Today'}
                           </span>
                         </div>
+                        {s.declaredValue > 0 && (
+                          <div className="text-right">
+                            <span>Declared Value: </span>
+                            <span className="text-emerald-600 font-bold">
+                              {(() => {
+                                const o = (s.originCountry || '').toLowerCase();
+                                const d = (s.destinationCountry || '').toLowerCase();
+                                let cur = 'INR';
+                                if (o !== 'india' || d !== 'india') {
+                                  const target = o !== 'india' ? o : d;
+                                  if (target.includes('united states') || target.includes('us')) cur = 'USD';
+                                  else if (target.includes('united kingdom') || target.includes('gb') || target.includes('uk')) cur = 'GBP';
+                                  else if (target.includes('united arab emirates') || target.includes('uae')) cur = 'AED';
+                                  else if (target.includes('australia')) cur = 'AUD';
+                                  else cur = 'USD';
+                                }
+                                const sym = cur === 'USD' ? '$' : cur === 'GBP' ? '£' : cur === 'AED' ? 'د.إ' : cur === 'AUD' ? 'A$' : '₹';
+                                return `${sym}${Number(s.declaredValue).toFixed(2)}`;
+                              })()}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                     </div>
@@ -1230,74 +1462,152 @@ const StaffDashboard = () => {
         )}
 
         {/* TAB 4: CARRIER PROFILE */}
-        {activeTab === 'profile' && (
-          <div className="max-w-3xl space-y-8 animate-fade-in">
-            {/* Main profile card */}
-            <div className="premium-card p-6 rounded-3xl bg-white flex flex-col md:flex-row items-center md:items-start gap-6">
-              <div className="h-20 w-20 bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white rounded-full flex items-center justify-center font-bold text-3xl shadow-md border-4 border-indigo-50 shrink-0">
-                {user?.name?.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="space-y-4 text-center md:text-left flex-1">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
-                  <p className="text-xs font-semibold text-slate-400">Marine Bytes Registered Logistics Officer</p>
+        {activeTab === 'profile' && (() => {
+          const deliveredShipments = shipments.filter(s => s.status === 'Delivered');
+          const ratedShipments = deliveredShipments.filter(s => s.customerRating !== null && s.customerRating !== undefined);
+          const avgRating = ratedShipments.length > 0
+            ? (ratedShipments.reduce((sum, s) => sum + s.customerRating, 0) / ratedShipments.length).toFixed(1)
+            : null;
+
+          // Group by Month
+          const monthlyMap = {};
+          deliveredShipments.forEach(s => {
+            const date = new Date(s.updatedAt || s.createdAt);
+            const label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            monthlyMap[label] = (monthlyMap[label] || 0) + 1;
+          });
+          const monthlyData = Object.keys(monthlyMap).map(name => ({
+            name,
+            deliveries: monthlyMap[name]
+          }));
+
+          return (
+            <div className="max-w-3xl space-y-8 animate-fade-in">
+              {/* Main profile card */}
+              <div className="premium-card p-6 rounded-3xl bg-white flex flex-col md:flex-row items-center md:items-start gap-6">
+                <div className="h-20 w-20 bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white rounded-full flex items-center justify-center font-bold text-3xl shadow-md border-4 border-indigo-50 shrink-0">
+                  {user?.name?.slice(0, 2).toUpperCase()}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-b border-slate-100 py-4 text-xs">
-                  <div className="flex items-center space-x-2 text-slate-600">
-                    <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">EMAIL:</span>
-                    <span className="font-semibold">{user?.email}</span>
+                <div className="space-y-4 text-center md:text-left flex-1">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
+                    <p className="text-xs font-semibold text-slate-400">Marine Bytes Registered Logistics Officer</p>
                   </div>
-                  <div className="flex items-center space-x-2 text-slate-600">
-                    <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">MOBILE:</span>
-                    <span className="font-semibold">{user?.phone || 'Not Configured'}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-b border-slate-100 py-4 text-xs">
+                    <div className="flex items-center space-x-2 text-slate-600">
+                      <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">EMAIL:</span>
+                      <span className="font-semibold">{user?.email}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-slate-600">
+                      <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">MOBILE:</span>
+                      <span className="font-semibold">{user?.phone || 'Not Configured'}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-slate-600">
+                      <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">PORTAL ID:</span>
+                      <span className="font-mono bg-slate-50 px-1.5 py-0.5 rounded text-[10px]">{user?.id}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-slate-600">
+                      <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">ACCURACIES:</span>
+                      <span className="font-bold text-indigo-600">{successRate}% Completed</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2 text-slate-600">
-                    <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">PORTAL ID:</span>
-                    <span className="font-mono bg-slate-50 px-1.5 py-0.5 rounded text-[10px]">{user?.id}</span>
+                </div>
+              </div>
+
+              {/* Performance Metrics: Avg Rating & Chart */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="premium-card p-5 rounded-2xl bg-white space-y-3 flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5 mb-2">
+                      <Star size={16} className="text-amber-500 fill-amber-500" />
+                      <span>Average Customer Rating</span>
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                      Ratings are collected directly from customer feedback upon successful package delivery.
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-2 text-slate-600">
-                    <span className="font-bold text-slate-400 uppercase w-16 text-[9px]">ACCURACIES:</span>
-                    <span className="font-bold text-indigo-600">{successRate}% Completed</span>
+                  <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    {avgRating ? (
+                      <>
+                        <span className="text-4xl font-black text-slate-800">{avgRating}</span>
+                        <div className="flex gap-0.5 mt-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={16}
+                              className={`${
+                                star <= Math.round(parseFloat(avgRating))
+                                  ? 'text-amber-500 fill-amber-500'
+                                  : 'text-slate-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-slate-400 mt-2 font-semibold">Based on {ratedShipments.length} rated shipments</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">No ratings received yet.</span>
+                    )}
                   </div>
+                </div>
+
+                <div className="premium-card p-5 rounded-2xl bg-white space-y-3">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                    <Award size={16} className="text-indigo-600" />
+                    <span>Fulfillment Milestones</span>
+                  </h4>
+                  <div className="space-y-2 text-[11px] text-slate-600 font-semibold pt-1">
+                    <div className="flex justify-between">
+                      <span>Delivered Parcels:</span>
+                      <span className="text-slate-800 font-bold">{completedAssigned}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Rated Deliveries:</span>
+                      <span className="text-slate-800 font-bold">{ratedShipments.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Active Workload limit:</span>
+                      <span className="text-slate-800 font-bold">Unlimited</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Carrier Status:</span>
+                      <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[9px] font-bold">Active & Verified</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Deliveries Bar Chart */}
+              <div className="premium-card p-6 rounded-2xl bg-white space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Monthly Deliveries Volume</h4>
+                <div className="h-56">
+                  {monthlyData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
+                        <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }}
+                          labelStyle={{ fontSize: 10, fontWeight: 'bold' }}
+                        />
+                        <Bar dataKey="deliveries" fill="#4f46e5" radius={[4, 4, 0, 0]}>
+                          {monthlyData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill="#6366f1" />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-slate-400 text-xs italic">
+                      No delivery history recorded to display trends.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* Standards info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="premium-card p-5 rounded-2xl bg-white space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
-                  <Shield size={16} className="text-indigo-600" />
-                  <span>Security & Standards</span>
-                </h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Logistics operators must follow verification procedures. Make sure to collect confirmation tags or verify identity proof when updating parcel statuses to <b>Delivered</b>.
-                </p>
-              </div>
-
-              <div className="premium-card p-5 rounded-2xl bg-white space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
-                  <Award size={16} className="text-amber-500" />
-                  <span>Fulfillment Milestones</span>
-                </h4>
-                <div className="space-y-2 text-[11px] text-slate-600 font-semibold">
-                  <div className="flex justify-between">
-                    <span>Delivered Parcels:</span>
-                    <span className="text-slate-800 font-bold">{completedAssigned}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Active Workload limit:</span>
-                    <span className="text-slate-800 font-bold">Unlimited</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Carrier Status:</span>
-                    <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[9px] font-bold">Active & Verified</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
       </main>
 
@@ -1383,14 +1693,62 @@ const StaffDashboard = () => {
               </div>
 
               {newStatus === 'Delivered' && (
-                <div className="space-y-2 animate-fade-in">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    {t('proofOfDelivery')} (Customer Signature)
-                  </label>
-                  <p className="text-[10px] text-slate-500 italic mb-2">
-                    {t('signCanvasPlaceholder')}
-                  </p>
-                  <div className="border border-slate-200 bg-slate-50 rounded-xl overflow-hidden relative">
+                <div className="space-y-4 animate-fade-in">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Delivery Confirmation OTP (Provided by Customer)</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      pattern="\d{6}"
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition font-mono tracking-widest text-center text-lg font-bold"
+                      required={newStatus === 'Delivered'}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Proof of Delivery Photo (Required)
+                    </label>
+                    <div className="flex items-center space-x-3 mb-2">
+                      <label className="flex-1 flex items-center justify-center space-x-2 py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 border-dashed rounded-xl cursor-pointer transition text-xs text-slate-500">
+                        <Camera size={14} className="text-slate-400" />
+                        <span>{deliveryPhoto ? 'Change Photo' : 'Upload Delivery Photo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleDeliveryPhotoChange}
+                          className="hidden"
+                          required={newStatus === 'Delivered'}
+                        />
+                      </label>
+                      {deliveryPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryPhoto(null)}
+                          className="text-[10px] text-red-500 hover:underline font-bold"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    {deliveryPhoto && (
+                      <div className="mb-2 relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50 p-1 flex justify-center">
+                        <img src={deliveryPhoto} alt="Delivery preview" className="max-h-[100px] object-contain rounded-md" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      {t('proofOfDelivery')} (Customer Signature)
+                    </label>
+                    <p className="text-[10px] text-slate-500 italic mb-2">
+                      {t('signCanvasPlaceholder')}
+                    </p>
+                    <div className="border border-slate-200 bg-slate-50 rounded-xl overflow-hidden relative">
                     <canvas
                       ref={canvasRef}
                       width={380}
@@ -1413,7 +1771,8 @@ const StaffDashboard = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
               <div className="flex space-x-3 pt-3">
                 <button

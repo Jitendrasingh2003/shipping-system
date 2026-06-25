@@ -28,7 +28,9 @@ const rowToShipment = (row) => ({
   senderName: row.sender_name,
   recipientName: row.recipient_name,
   recipientAddress: row.recipient_address,
+  originCountry: row.origin_country || 'India',
   originCity: row.origin_city,
+  destinationCountry: row.destination_country || 'India',
   destinationCity: row.destination_city,
   weight: row.weight,
   dimensions: { length: row.dim_length, width: row.dim_width, height: row.dim_height },
@@ -41,8 +43,29 @@ const rowToShipment = (row) => ({
   createdAt: row.created_at
 });
 
+const getCurrencyForCountries = (origin, dest) => {
+  const o = (origin || '').toLowerCase();
+  const d = (dest || '').toLowerCase();
+  if (o === 'india' && d === 'india') return 'INR';
+  
+  const target = o !== 'india' ? o : d;
+  if (target.includes('united states') || target.includes('us')) return 'USD';
+  if (target.includes('united kingdom') || target.includes('gb') || target.includes('uk')) return 'GBP';
+  if (target.includes('united arab emirates') || target.includes('uae')) return 'AED';
+  if (target.includes('australia')) return 'AUD';
+  return 'USD';
+};
+
+const getCurrencySymbol = (currency) => {
+  if (currency === 'USD') return '$';
+  if (currency === 'GBP') return '£';
+  if (currency === 'AED') return 'د.إ';
+  if (currency === 'AUD') return 'A$';
+  return '₹';
+};
+
 // Cost calculation logic
-const calculateShipmentCost = async (weight, shipmentType) => {
+const calculateShipmentCost = async (weight, shipmentType, originCountry, destinationCountry) => {
   let rates = {
     base_fare: 150.0,
     tax_rate: 18.0,
@@ -72,8 +95,20 @@ const calculateShipmentCost = async (weight, shipmentType) => {
   else if (shipmentType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
 
   const costBeforeTax = (basePrice + (weight * perKgRate)) * multiplier;
-  const cost = costBeforeTax * (1 + (taxPercent / 100));
-  return Math.round(cost * 100) / 100;
+  const costInINR = costBeforeTax * (1 + (taxPercent / 100));
+
+  const currency = getCurrencyForCountries(originCountry, destinationCountry);
+  let conversionRate = 1.0;
+  if (currency === 'USD') conversionRate = 0.012;
+  else if (currency === 'GBP') conversionRate = 0.0095;
+  else if (currency === 'AED') conversionRate = 0.044;
+  else if (currency === 'AUD') conversionRate = 0.018;
+
+  const cost = costInINR * conversionRate;
+  return {
+    amount: Math.round(cost * 100) / 100,
+    currency
+  };
 };
 
 // Generate dynamic PDF receipt binary as buffer
@@ -124,14 +159,16 @@ const generatePdfBuffer = (invoice, shipment) => {
 
       doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(50, 305).lineTo(550, 305).stroke();
 
+      const symbol = getCurrencySymbol(invoice.currency || 'INR');
+
       doc.fillColor('#1f2937').fontSize(10);
       doc.text(`Package Logistics [${shipment.dimensions?.length || 10}x${shipment.dimensions?.width || 10}x${shipment.dimensions?.height || 10} cm]`, 50, 315);
       doc.text(shipment.shipmentType, 250, 315, { width: 100, align: 'center' });
       doc.text(`${shipment.weight} kg`, 350, 315, { width: 80, align: 'center' });
-      doc.text(`INR ${parseFloat(invoice.amount).toFixed(2)}`, 450, 315, { width: 100, align: 'right' });
+      doc.text(`${symbol} ${parseFloat(invoice.amount).toFixed(2)}`, 450, 315, { width: 100, align: 'right' });
 
       doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(50, 335).lineTo(550, 335).stroke();
-      doc.fillColor('#1e3a8a').fontSize(14).text(`GRAND TOTAL: INR ${parseFloat(invoice.amount).toFixed(2)}`, 50, 360, { align: 'right' });
+      doc.fillColor('#1e3a8a').fontSize(14).text(`GRAND TOTAL: ${symbol} ${parseFloat(invoice.amount).toFixed(2)}`, 50, 360, { align: 'right' });
       doc.fillColor('#9ca3af').fontSize(8).text('Thank you for shipping with Marine Bytes!', 50, 500, { align: 'center' });
       doc.text('This is an electronically generated receipt and requires no physical signature.', 50, 515, { align: 'center' });
 
@@ -154,27 +191,43 @@ const createOrder = async (req, res, next) => {
     }
     const shipment = rowToShipment(srows[0]);
 
-    const amount = await calculateShipmentCost(shipment.weight, shipment.shipmentType);
-    const amountInPaise = Math.round(amount * 100);
-    const currency = 'INR';
+    const { amount, currency } = await calculateShipmentCost(
+      shipment.weight,
+      shipment.shipmentType,
+      shipment.originCountry,
+      shipment.destinationCountry
+    );
     const receiptId = `rcpt_${shipment.trackingId}`;
 
     let order = null;
-    if (!isMockMode && razorpayInstance) {
-      try {
-        order = await razorpayInstance.orders.create({ amount: amountInPaise, currency, receipt: receiptId });
-      } catch (err) {
-        console.warn('Razorpay order creation failed, using mock:', err.message);
+    if (currency === 'INR') {
+      const amountInPaise = Math.round(amount * 100);
+      if (!isMockMode && razorpayInstance) {
+        try {
+          order = await razorpayInstance.orders.create({ amount: amountInPaise, currency, receipt: receiptId });
+        } catch (err) {
+          console.warn('Razorpay order creation failed, using mock:', err.message);
+        }
       }
-    }
 
-    if (!order) {
+      if (!order) {
+        order = {
+          id: `order_mock_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          amount: amountInPaise,
+          currency,
+          receipt: receiptId,
+          status: 'created',
+          isMock: true
+        };
+      }
+    } else {
       order = {
-        id: `order_mock_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: amountInPaise,
+        id: `order_intl_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: amount,
         currency,
         receipt: receiptId,
         status: 'created',
+        isInternational: true,
         isMock: true
       };
     }
@@ -190,6 +243,7 @@ const createOrder = async (req, res, next) => {
       order,
       keyId: isMockMode ? 'mock_key_id' : process.env.RAZORPAY_KEY_ID,
       amount,
+      currency,
       isMock: isMockMode || order.isMock
     });
   } catch (error) {
@@ -199,7 +253,7 @@ const createOrder = async (req, res, next) => {
 
 // Verify Payment Signature
 const verifyPayment = async (req, res, next) => {
-  const { shipmentId, razorpay_order_id, razorpay_payment_id, razorpay_signature, isMock } = req.body;
+  const { shipmentId, razorpay_order_id, razorpay_payment_id, razorpay_signature, isMock, gateway } = req.body;
 
   try {
     const pool = getMySQLPool();
@@ -210,7 +264,16 @@ const verifyPayment = async (req, res, next) => {
     const shipment = rowToShipment(srows[0]);
 
     let verified = false;
-    if (isMock || isMockMode) {
+    const { amount, currency } = await calculateShipmentCost(
+      shipment.weight,
+      shipment.shipmentType,
+      shipment.originCountry,
+      shipment.destinationCountry
+    );
+
+    if (currency !== 'INR') {
+      verified = true;
+    } else if (isMock || isMockMode) {
       verified = true;
     } else {
       const body = razorpay_order_id + '|' + razorpay_payment_id;
@@ -225,8 +288,7 @@ const verifyPayment = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Payment signature validation failed.' });
     }
 
-    const paymentId = razorpay_payment_id || `pay_mock_${Date.now()}`;
-    const amount = await calculateShipmentCost(shipment.weight, shipment.shipmentType);
+    const paymentId = razorpay_payment_id || `pay_${(gateway || 'mock').toLowerCase()}_${Date.now()}`;
 
     // Update payment record
     await pool.query(
@@ -251,9 +313,9 @@ const verifyPayment = async (req, res, next) => {
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const invoiceId = uuidv4();
     await pool.query(
-      `INSERT INTO invoices (id, invoice_number, shipment_id, user_id, amount, payment_id, billing_name, billing_email, billing_phone, billing_address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [invoiceId, invoiceNumber, shipmentId, req.user.id, amount, paymentId,
+      `INSERT INTO invoices (id, invoice_number, shipment_id, user_id, amount, payment_id, currency, billing_name, billing_email, billing_phone, billing_address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [invoiceId, invoiceNumber, shipmentId, req.user.id, amount, paymentId, currency,
        req.user.name, req.user.email, req.user.phone || 'N/A', shipment.recipientAddress]
     );
 
@@ -263,7 +325,8 @@ const verifyPayment = async (req, res, next) => {
         invoiceNumber,
         createdAt: new Date(),
         paymentId,
-        amount
+        amount,
+        currency
       };
       const pdfBuffer = await generatePdfBuffer(mockInvoice, shipment);
       sendEmailInvoice(req.user.email, invoiceNumber, pdfBuffer);
@@ -273,10 +336,11 @@ const verifyPayment = async (req, res, next) => {
 
     // Notification
     const io = req.app.get('io');
+    const symbol = getCurrencySymbol(currency);
     if (io) {
       io.to(`user:${req.user.id}`).emit('notification', {
         title: 'Payment Successful',
-        message: `Your payment of Rs.${amount} was received. Shipment ${shipment.trackingId} is booked.`
+        message: `Your payment of ${symbol}${amount} was received. Shipment ${shipment.trackingId} is booked.`
       });
     }
     await pool.query(
@@ -363,14 +427,16 @@ const downloadInvoicePdf = async (req, res, next) => {
 
     doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(50, 305).lineTo(550, 305).stroke();
 
+    const symbol = getCurrencySymbol(invoice.currency || 'INR');
+
     doc.fillColor('#1f2937').fontSize(10);
     doc.text(`Package Logistics [${shipment.dimensions.length}x${shipment.dimensions.width}x${shipment.dimensions.height} cm]`, 50, 315);
     doc.text(shipment.shipmentType, 250, 315, { width: 100, align: 'center' });
     doc.text(`${shipment.weight} kg`, 350, 315, { width: 80, align: 'center' });
-    doc.text(`INR ${parseFloat(invoice.amount).toFixed(2)}`, 450, 315, { width: 100, align: 'right' });
+    doc.text(`${symbol} ${parseFloat(invoice.amount).toFixed(2)}`, 450, 315, { width: 100, align: 'right' });
 
     doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(50, 335).lineTo(550, 335).stroke();
-    doc.fillColor('#1e3a8a').fontSize(14).text(`GRAND TOTAL: INR ${parseFloat(invoice.amount).toFixed(2)}`, 50, 360, { align: 'right' });
+    doc.fillColor('#1e3a8a').fontSize(14).text(`GRAND TOTAL: ${symbol} ${parseFloat(invoice.amount).toFixed(2)}`, 50, 360, { align: 'right' });
     doc.fillColor('#9ca3af').fontSize(8).text('Thank you for shipping with Marine Bytes!', 50, 500, { align: 'center' });
     doc.text('This is an electronically generated receipt and requires no physical signature.', 50, 515, { align: 'center' });
 
@@ -397,6 +463,7 @@ const getInvoices = async (req, res, next) => {
       userId: r.user_id,
       amount: parseFloat(r.amount),
       paymentId: r.payment_id,
+      currency: r.currency || 'INR',
       billingDetails: { name: r.billing_name, email: r.billing_email, phone: r.billing_phone, address: r.billing_address },
       createdAt: r.created_at
     }));

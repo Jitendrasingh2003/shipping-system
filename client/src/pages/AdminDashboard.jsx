@@ -225,6 +225,18 @@ const AdminDashboard = () => {
   const [fDriver, setFDriver] = useState('');
   const [fCapacity, setFCapacity] = useState('');
 
+  // Staff Performance State
+  const [staffPerformance, setStaffPerformance] = useState([]);
+
+  // Block/Unblock State
+  const [blockingUserId, setBlockingUserId] = useState(null);
+
+  // Bulk Assign State
+  const [selectedShipmentIds, setSelectedShipmentIds] = useState([]);
+  const [bulkAssignModal, setBulkAssignModal] = useState(false);
+  const [bulkStaffId, setBulkStaffId] = useState('');
+  const [shipmentFilter, setShipmentFilter] = useState('all'); // 'all' | 'domestic' | 'international'
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -266,6 +278,12 @@ const AdminDashboard = () => {
       const ticketsRes = await axios.get('/shipments/tickets');
       if (ticketsRes.data.success) {
         setTickets(ticketsRes.data.tickets);
+      }
+
+      // Fetch Staff Performance
+      const perfRes = await axios.get('/shipments/staff-performance');
+      if (perfRes.data.success) {
+        setStaffPerformance(perfRes.data.performance);
       }
     } catch (err) {
       console.error('Failed to load logistics parameters:', err.message);
@@ -467,6 +485,64 @@ const AdminDashboard = () => {
     toast.success(`QR Scan Successful: ${scannedTrackingId} filtered!`);
   };
 
+  // Block / Unblock User
+  const handleBlockUser = async (userId, currentBlocked) => {
+    setBlockingUserId(userId);
+    try {
+      const res = await axios.put(`/shipments/users/${userId}/block`, { blocked: !currentBlocked });
+      if (res.data.success) {
+        toast.success(res.data.message);
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Failed to update user status.');
+    } finally {
+      setBlockingUserId(null);
+    }
+  };
+
+  const handleRefundAction = async (shipmentId, action) => {
+    try {
+      toast.loading(`Processing refund: ${action}...`, { id: 'refund' });
+      const res = await axios.put(`/shipments/${shipmentId}/refund`, { action });
+      if (res.data.success) {
+        toast.success(`Refund request ${action.toLowerCase()}ed successfully.`, { id: 'refund' });
+        fetchData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update refund status.', { id: 'refund' });
+    }
+  };
+
+  // Bulk Assign Shipments
+  const handleBulkAssign = async (e) => {
+    e.preventDefault();
+    if (!bulkStaffId || selectedShipmentIds.length === 0) return;
+    const staffObj = staffList.find(s => s.id === bulkStaffId);
+    try {
+      const res = await axios.post('/shipments/bulk-assign', {
+        shipmentIds: selectedShipmentIds,
+        staffId: bulkStaffId,
+        staffName: staffObj?.name || ''
+      });
+      if (res.data.success) {
+        toast.success(res.data.message);
+        setSelectedShipmentIds([]);
+        setBulkAssignModal(false);
+        setBulkStaffId('');
+        fetchData();
+      }
+    } catch (err) {
+      toast.error('Bulk assign failed.');
+    }
+  };
+
+  const toggleShipmentSelection = (id) => {
+    setSelectedShipmentIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -483,11 +559,19 @@ const AdminDashboard = () => {
     ? Object.keys(stats.typeBreakdown).map(key => ({ name: key, value: stats.typeBreakdown[key] }))
     : [];
 
-  const filteredShipments = shipments.filter(ship => 
-    ship.trackingId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ship.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ship.recipientName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredShipments = shipments.filter(ship => {
+    const matchesSearch = 
+      ship.trackingId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ship.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ship.recipientName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    const isDomestic = (ship.originCountry || 'India') === 'India' && (ship.destinationCountry || 'India') === 'India';
+    if (shipmentFilter === 'domestic') return isDomestic;
+    if (shipmentFilter === 'international') return !isDomestic;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative">
@@ -607,6 +691,33 @@ const AdminDashboard = () => {
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                     {t('liveFeed')}
                   </div>
+                </div>
+              </div>
+
+              {/* 🚢 Realistic Maritime Logistics Banner */}
+              <div className="relative rounded-3xl overflow-hidden border border-slate-200/80 bg-gradient-to-r from-slate-900 to-indigo-900 text-white shadow-xl h-44 flex items-center p-6 md:p-8">
+                {/* Banner Image Background with subtle overlay */}
+                <div className="absolute inset-0 z-0">
+                  <img 
+                    src="/cargo_ship_banner.png" 
+                    alt="Maritime Logistics" 
+                    className="w-full h-full object-cover opacity-35 mix-blend-overlay"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-transparent"></div>
+                </div>
+                
+                {/* Banner Content */}
+                <div className="relative z-10 space-y-2 max-w-xl text-left">
+                  <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-[10px] font-extrabold uppercase tracking-widest">
+                    <Globe size={12} className="animate-spin-slow" />
+                    <span>HQ Logistics Hub Telemetry</span>
+                  </div>
+                  <h3 className="text-lg md:text-xl font-black tracking-tight text-white">
+                    Marine Bytes Fleet Command Operations
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-md">
+                    Audit container allocations, dispatch vehicles, manage pricing structures, and coordinate international cargo lines seamlessly.
+                  </p>
                 </div>
               </div>
 
@@ -957,15 +1068,63 @@ const AdminDashboard = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full max-w-md">
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('all')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'all'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                All Shipments
+              </button>
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('domestic')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'domestic'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Domestic 🇮🇳
+              </button>
+              <button
+                type="button"
+                onClick={() => setShipmentFilter('international')}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  shipmentFilter === 'international'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                International 🌐
+              </button>
+            </div>
+
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold">
+                      <th className="p-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedShipmentIds.length === filteredShipments.filter(s => s.paymentStatus === 'Paid' && s.status !== 'Delivered').length && filteredShipments.filter(s => s.paymentStatus === 'Paid' && s.status !== 'Delivered').length > 0}
+                          onChange={(e) => {
+                            const eligible = filteredShipments.filter(s => s.paymentStatus === 'Paid' && s.status !== 'Delivered');
+                            setSelectedShipmentIds(e.target.checked ? eligible.map(s => s.id) : []);
+                          }}
+                          className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                        />
+                      </th>
                       <th className="p-4">Tracking ID</th>
                       <th className="p-4">Sender</th>
                       <th className="p-4">Recipient</th>
                       <th className="p-4">Route</th>
+                      <th className="p-4">Scheduled Pickup</th>
                       <th className="p-4">Service Type</th>
                       <th className="p-4">Payment</th>
                       <th className="p-4">Status</th>
@@ -976,15 +1135,76 @@ const AdminDashboard = () => {
                   <tbody className="divide-y divide-slate-100">
                     {filteredShipments.length === 0 ? (
                       <tr>
-                        <td colSpan="9" className="p-6 text-center text-slate-400 italic">No shipments match search criteria.</td>
+                        <td colSpan="10" className="p-6 text-center text-slate-400 italic">No shipments match search criteria.</td>
                       </tr>
                     ) : (
                       filteredShipments.map((shipment) => (
                         <tr key={shipment.id} className="hover:bg-slate-50/40 transition">
-                          <td className="p-4 font-bold text-slate-800">{shipment.trackingId}</td>
-                          <td className="p-4">{shipment.senderName}</td>
-                          <td className="p-4 font-medium text-slate-700">{shipment.recipientName}</td>
+                          <td className="p-4">
+                            {shipment.paymentStatus === 'Paid' && shipment.status !== 'Delivered' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedShipmentIds.includes(shipment.id)}
+                                onChange={() => toggleShipmentSelection(shipment.id)}
+                                className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer"
+                              />
+                            )}
+                          </td>
+                          <td className="p-4 font-bold text-slate-800">
+                            <div className="flex items-center space-x-1">
+                              {((shipment.originCountry || 'India') !== 'India' || (shipment.destinationCountry || 'India') !== 'India') && (
+                                <span className="text-indigo-600 font-bold" title={`International: ${shipment.originCountry} → ${shipment.destinationCountry}`}>🌐</span>
+                              )}
+                              <span>{shipment.trackingId}</span>
+                            </div>
+                            {shipment.govtIdProof && (
+                              <span className="block text-[9px] text-slate-400 font-extrabold bg-slate-100 border border-slate-200 px-1 py-0.5 rounded w-max mt-0.5">
+                                ID: {shipment.govtIdProof}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-slate-800">{shipment.senderName}</span>
+                            <div className="text-[9px] text-slate-400 font-medium mt-0.5 space-y-0.5">
+                              <div>Category: <span className="font-semibold text-slate-600">{shipment.consignmentCategory || 'Parcel'}</span></div>
+                              {shipment.declaredValue > 0 && (
+                                <div>Value: <span className="font-semibold text-slate-600">
+                                  {(() => {
+                                    const o = (shipment.originCountry || '').toLowerCase();
+                                    const d = (shipment.destinationCountry || '').toLowerCase();
+                                    let cur = 'INR';
+                                    if (o !== 'india' || d !== 'india') {
+                                      const target = o !== 'india' ? o : d;
+                                      if (target.includes('united states') || target.includes('us')) cur = 'USD';
+                                      else if (target.includes('united kingdom') || target.includes('gb') || target.includes('uk')) cur = 'GBP';
+                                      else if (target.includes('united arab emirates') || target.includes('uae')) cur = 'AED';
+                                      else if (target.includes('australia')) cur = 'AUD';
+                                      else cur = 'USD';
+                                    }
+                                    const sym = cur === 'USD' ? '$' : cur === 'GBP' ? '£' : cur === 'AED' ? 'د.إ' : cur === 'AUD' ? 'A$' : '₹';
+                                    return `${sym}${Number(shipment.declaredValue).toFixed(2)}`;
+                                  })()}
+                                </span></div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-slate-800">{shipment.recipientName}</div>
+                            {shipment.recipientPhone && (
+                              <div className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                                Phone: <span className="text-slate-600">{shipment.recipientPhone}</span>
+                              </div>
+                            )}
+                            {shipment.customsDescription && (
+                              <div className="text-[9px] text-slate-400 italic mt-0.5 max-w-[150px] truncate" title={shipment.customsDescription}>
+                                Customs: <span className="text-slate-600">{shipment.customsDescription}</span>
+                              </div>
+                            )}
+                          </td>
                           <td className="p-4">{shipment.originCity} → {shipment.destinationCity}</td>
+                          <td className="p-4 font-semibold text-indigo-600">
+                            {shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Today'}
+                          </td>
                           <td className="p-4">
                             <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
                               {shipment.shipmentType}
@@ -1030,6 +1250,47 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Bulk Assign Bar */}
+            {selectedShipmentIds.length > 0 && (
+              <div className="flex items-center justify-between bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-lg">
+                <span className="text-sm font-semibold">{selectedShipmentIds.length} shipment(s) selected</span>
+                <div className="flex gap-3">
+                  <button onClick={() => setSelectedShipmentIds([])} className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition">Clear</button>
+                  <button onClick={() => setBulkAssignModal(true)} className="px-3 py-1.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-xs font-bold transition">Bulk Assign Staff</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Bulk Assign Modal */}
+        {bulkAssignModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+              <h3 className="text-lg font-extrabold text-slate-800 mb-1">Bulk Assign Staff</h3>
+              <p className="text-xs text-slate-500 mb-6">Assigning <span className="font-bold text-indigo-600">{selectedShipmentIds.length} shipments</span> to a staff member.</p>
+              <form onSubmit={handleBulkAssign} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Select Staff Operator</label>
+                  <select
+                    value={bulkStaffId}
+                    onChange={e => setBulkStaffId(e.target.value)}
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">-- Select Staff --</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setBulkAssignModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">Cancel</button>
+                  <button type="submit" disabled={!bulkStaffId} className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition disabled:opacity-50">Assign Now</button>
+                </div>
+              </form>
             </div>
           </div>
         )}
@@ -1109,36 +1370,108 @@ const AdminDashboard = () => {
               </form>
             </div>
 
-            {/* Staff List */}
-            <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Staff Directory Logs</h3>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-400 font-bold">
-                      <th className="pb-3.5">Name</th>
-                      <th className="pb-3.5">Email ID</th>
-                      <th className="pb-3.5">Contact Number</th>
-                      <th className="pb-3.5">Active Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {staffList.map((staff) => (
-                      <tr key={staff.id} className="hover:bg-slate-50/30 transition">
-                        <td className="py-3.5 font-bold text-slate-800">{staff.name}</td>
-                        <td className="py-3.5 font-medium text-slate-600">{staff.email}</td>
-                        <td className="py-3.5 text-slate-500">{staff.phone || 'N/A'}</td>
-                        <td className="py-3.5">
-                          <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                            <Check size={10} />
-                            <span>Verified</span>
-                          </span>
-                        </td>
-                      </tr>
+            {/* Staff Directory + Performance */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Performance Cards */}
+              {staffPerformance.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-4">📊 Staff Performance Report</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {staffPerformance.map(perf => (
+                      <div key={perf.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-indigo-100 text-indigo-600 w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm uppercase">
+                              {perf.name.slice(0, 2)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{perf.name}</p>
+                              <p className="text-[10px] text-slate-400">{perf.email}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            perf.successRate >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            perf.successRate >= 50 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            'bg-red-50 text-red-600 border border-red-200'
+                          }`}>{perf.successRate}% success</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                          <div className="bg-slate-50 rounded-xl p-2">
+                            <p className="font-black text-slate-800 text-base">{perf.totalAssigned}</p>
+                            <p className="text-slate-400 font-semibold">Assigned</p>
+                          </div>
+                          <div className="bg-emerald-50 rounded-xl p-2">
+                            <p className="font-black text-emerald-700 text-base">{perf.delivered}</p>
+                            <p className="text-slate-400 font-semibold">Delivered</p>
+                          </div>
+                          <div className="bg-amber-50 rounded-xl p-2">
+                            <p className="font-black text-amber-700 text-base">{perf.avgRating || '—'}</p>
+                            <p className="text-slate-400 font-semibold">Avg ⭐</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${
+                              perf.successRate >= 80 ? 'bg-emerald-500' : perf.successRate >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                            }`} style={{ width: `${perf.successRate}%` }} />
+                          </div>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Staff List with Block Button */}
+              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Staff Directory Logs</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                        <th className="pb-3.5">Name</th>
+                        <th className="pb-3.5">Email ID</th>
+                        <th className="pb-3.5">Contact</th>
+                        <th className="pb-3.5">Status</th>
+                        <th className="pb-3.5 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {staffList.map((staff) => (
+                        <tr key={staff.id} className="hover:bg-slate-50/30 transition">
+                          <td className="py-3.5 font-bold text-slate-800">{staff.name}</td>
+                          <td className="py-3.5 font-medium text-slate-600">{staff.email}</td>
+                          <td className="py-3.5 text-slate-500">{staff.phone || 'N/A'}</td>
+                          <td className="py-3.5">
+                            {staff.isBlocked ? (
+                              <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold border border-red-200">
+                                <span>🚫 Blocked</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                                <Check size={10} />
+                                <span>Active</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 text-right">
+                            <button
+                              onClick={() => handleBlockUser(staff.id, staff.isBlocked)}
+                              disabled={blockingUserId === staff.id}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition disabled:opacity-50 ${
+                                staff.isBlocked
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                  : 'bg-red-50 hover:bg-red-100 text-red-600'
+                              }`}
+                            >
+                              {blockingUserId === staff.id ? '...' : staff.isBlocked ? 'Unblock' : 'Block'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
@@ -1147,11 +1480,100 @@ const AdminDashboard = () => {
 
         {/* TAB 4: FINANCE & INVOICES */}
         {activeTab === 'finance' && (
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm animate-fade-in">
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Financial Ledger Invoices</h3>
-            
-            <div className="overflow-x-auto">
-              <InvoiceTable listUrl="/payments/invoices" />
+          <div className="space-y-8 animate-fade-in">
+            {/* Refunds Queue Section */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="p-2 bg-red-50 text-red-600 rounded-xl">
+                  <Coins size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">Refunds Queue</h3>
+                  <p className="text-[10px] text-slate-400">Process refunds for cancelled paid shipments</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                      <th className="pb-3.5">Tracking ID</th>
+                      <th className="pb-3.5">Customer</th>
+                      <th className="pb-3.5">Amount</th>
+                      <th className="pb-3.5">Payment ID</th>
+                      <th className="pb-3.5">Refund Status</th>
+                      <th className="pb-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {shipments.filter(s => s.refundStatus === 'Pending').length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-6 text-center text-slate-400 italic">No pending refund requests.</td>
+                      </tr>
+                    ) : (
+                      shipments.filter(s => s.refundStatus === 'Pending').map((shipment) => {
+                        const getEstimatedCost = (s) => {
+                          const basePrice = 150.0;
+                          const perKgRate = 50.0;
+                          const taxPercent = 18.0;
+
+                          let multiplier = 1.0;
+                          if (s.shipmentType === 'Express') multiplier = 1.5;
+                          else if (s.shipmentType === 'Air') multiplier = 2.5;
+                          else if (s.shipmentType === 'Ocean') multiplier = 0.8;
+                          
+                          let intlSurcharge = 1.0;
+                          if (s.originCountry !== 'India' || s.destinationCountry !== 'India') {
+                            intlSurcharge = 1.8;
+                          }
+                          const costBeforeTax = (basePrice + (s.weight * perKgRate)) * multiplier * intlSurcharge;
+                          const cost = costBeforeTax * (1 + (taxPercent / 100));
+                          return Math.round(cost * 100) / 100;
+                        };
+
+                        return (
+                          <tr key={shipment.id} className="hover:bg-slate-50/40 transition">
+                            <td className="py-3.5 font-bold text-slate-800">{shipment.trackingId}</td>
+                            <td className="py-3.5 font-medium">{shipment.senderName}</td>
+                            <td className="py-3.5 font-bold text-slate-700">₹{getEstimatedCost(shipment).toFixed(2)}</td>
+                            <td className="py-3.5 text-slate-500 font-mono">{shipment.paymentId || 'N/A'}</td>
+                            <td className="py-3.5">
+                              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 animate-pulse">
+                                Pending Refund Approval
+                              </span>
+                            </td>
+                            <td className="py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleRefundAction(shipment.id, 'Approve')}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition text-[10px]"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRefundAction(shipment.id, 'Reject')}
+                                  className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold transition text-[10px]"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Invoices Section */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Financial Ledger Invoices</h3>
+              
+              <div className="overflow-x-auto">
+                <InvoiceTable listUrl="/payments/invoices" />
+              </div>
             </div>
           </div>
         )}

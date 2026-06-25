@@ -15,10 +15,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
   // Not logged in → redirect to appropriate login page
   if (!token || !user) {
-    const loginRoute = allowedRoles.includes('admin') && allowedRoles.length === 1
-      ? '/admin-login'
-      : '/';
-    return <Navigate to={loginRoute} replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Logged in but wrong role → silently redirect to their own dashboard

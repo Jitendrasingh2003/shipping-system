@@ -124,6 +124,10 @@ const initTables = async () => {
         payment_status VARCHAR(50) DEFAULT 'Pending',
         payment_id VARCHAR(255) DEFAULT NULL,
         history JSON DEFAULT NULL,
+        consignment_category VARCHAR(100) DEFAULT 'Parcel',
+        declared_value DECIMAL(10, 2) DEFAULT 0.0,
+        recipient_phone VARCHAR(50) DEFAULT '',
+        customs_description TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -138,6 +142,7 @@ const initTables = async () => {
         user_id VARCHAR(36) NOT NULL,
         amount DECIMAL(10, 2) NOT NULL,
         payment_id VARCHAR(255) NOT NULL,
+        currency VARCHAR(10) DEFAULT 'INR',
         billing_name VARCHAR(255) DEFAULT '',
         billing_email VARCHAR(255) DEFAULT '',
         billing_phone VARCHAR(50) DEFAULT '',
@@ -287,6 +292,126 @@ const initTables = async () => {
     } catch (err) {
       if (err.errno !== 1060) {
         console.error('❌ Failed to alter tickets table for sender_role:', err.message);
+      }
+    }
+
+    // Ensure customer_rating column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN customer_rating INT DEFAULT NULL');
+      console.log('📝 MySQL: Added customer_rating column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for customer_rating:', err.message);
+      }
+    }
+
+    // Ensure customer_feedback column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN customer_feedback TEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added customer_feedback column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for customer_feedback:', err.message);
+      }
+    }
+
+    // Ensure delivery_photo column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN delivery_photo LONGTEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added delivery_photo column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for delivery_photo:', err.message);
+      }
+    }
+
+    // Ensure is_blocked column exists in users table
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN is_blocked TINYINT(1) DEFAULT 0');
+      console.log('📝 MySQL: Added is_blocked column to users table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter users table for is_blocked:', err.message);
+      }
+    }
+
+    // Ensure delivery_otp column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN delivery_otp VARCHAR(6) DEFAULT NULL');
+      console.log('📝 MySQL: Added delivery_otp column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for delivery_otp:', err.message);
+      }
+    }
+
+    // Ensure refund_status column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN refund_status VARCHAR(50) DEFAULT "None"');
+      console.log('📝 MySQL: Added refund_status column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for refund_status:', err.message);
+      }
+    }
+
+    // Ensure pickup_date column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN pickup_date DATETIME DEFAULT NULL');
+      console.log('📝 MySQL: Added pickup_date column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for pickup_date:', err.message);
+      }
+    }
+
+    // Ensure currency column exists in invoices table
+    try {
+      await connection.query("ALTER TABLE invoices ADD COLUMN currency VARCHAR(10) DEFAULT 'INR'");
+      console.log('📝 MySQL: Added currency column to invoices table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter invoices table for currency:', err.message);
+      }
+    }
+
+    // Ensure consignment_category column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN consignment_category VARCHAR(100) DEFAULT "Parcel"');
+      console.log('📝 MySQL: Added consignment_category column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for consignment_category:', err.message);
+      }
+    }
+
+    // Ensure declared_value column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN declared_value DECIMAL(10, 2) DEFAULT 0.0');
+      console.log('📝 MySQL: Added declared_value column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for declared_value:', err.message);
+      }
+    }
+
+    // Ensure recipient_phone column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN recipient_phone VARCHAR(50) DEFAULT ""');
+      console.log('📝 MySQL: Added recipient_phone column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for recipient_phone:', err.message);
+      }
+    }
+
+    // Ensure customs_description column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN customs_description TEXT DEFAULT NULL');
+      console.log('📝 MySQL: Added customs_description column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for customs_description:', err.message);
       }
     }
 
