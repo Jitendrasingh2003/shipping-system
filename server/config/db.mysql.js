@@ -415,6 +415,26 @@ const initTables = async () => {
       }
     }
 
+    // Ensure fleet_vehicle_id column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN fleet_vehicle_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added fleet_vehicle_id column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for fleet_vehicle_id:', err.message);
+      }
+    }
+
+    // Ensure fleet_vehicle_name column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN fleet_vehicle_name VARCHAR(255) DEFAULT NULL');
+      console.log('📝 MySQL: Added fleet_vehicle_name column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for fleet_vehicle_name:', err.message);
+      }
+    }
+
     // REFERRALS
     try {
       await connection.query(`

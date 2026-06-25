@@ -69,7 +69,7 @@ const AdminDashboard = () => {
   // Export Shipments to CSV
   const exportShipmentsToCSV = () => {
     if (shipments.length === 0) return toast.error('No shipments to export.');
-    const headers = ['Tracking ID', 'Sender Name', 'Recipient Name', 'Origin', 'Destination', 'Type', 'Status', 'Payment Status', 'Assigned Staff'];
+    const headers = ['Tracking ID', 'Sender Name', 'Recipient Name', 'Origin', 'Destination', 'Type', 'Fleet Vehicle', 'Status', 'Payment Status', 'Assigned Staff'];
     const rows = shipments.map(s => [
       s.trackingId,
       s.senderName,
@@ -77,6 +77,7 @@ const AdminDashboard = () => {
       s.originCity,
       s.destinationCity,
       s.shipmentType,
+      s.fleetVehicleName || 'N/A',
       s.status,
       s.paymentStatus,
       s.assignedStaffName || 'Unassigned'
@@ -1126,6 +1127,7 @@ const AdminDashboard = () => {
                       <th className="p-4">Route</th>
                       <th className="p-4">Scheduled Pickup</th>
                       <th className="p-4">Service Type</th>
+                      <th className="p-4">Fleet Vehicle</th>
                       <th className="p-4">Payment</th>
                       <th className="p-4">Status</th>
                       <th className="p-4">Staff Operator</th>
@@ -1135,7 +1137,7 @@ const AdminDashboard = () => {
                   <tbody className="divide-y divide-slate-100">
                     {filteredShipments.length === 0 ? (
                       <tr>
-                        <td colSpan="10" className="p-6 text-center text-slate-400 italic">No shipments match search criteria.</td>
+                        <td colSpan="11" className="p-6 text-center text-slate-400 italic">No shipments match search criteria.</td>
                       </tr>
                     ) : (
                       filteredShipments.map((shipment) => (
@@ -1209,6 +1211,15 @@ const AdminDashboard = () => {
                             <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
                               {shipment.shipmentType}
                             </span>
+                          </td>
+                          <td className="p-4">
+                            {shipment.fleetVehicleName ? (
+                              <span className="text-[10px] font-medium text-slate-700 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg block w-max">
+                                {shipment.fleetVehicleName}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 italic text-[10px]">—</span>
+                            )}
                           </td>
                           <td className="p-4">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${

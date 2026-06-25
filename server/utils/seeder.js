@@ -208,12 +208,18 @@ const runDatabaseSeeder = async () => {
     if (fleetCount === 0) {
       console.log('🌱 Seeding demo fleet...');
       const fleet = [
-        { num: 'MH-03-TC-1234', type: 'Truck',          status: 'In Transit',  driver: 'Vikram Singh',     cap: 12000, route: 'Mumbai to Bangalore' },
-        { num: 'DL-01-AB-9876', type: 'Delivery Van',   status: 'Idle',        driver: 'Amit Verma',       cap: 1500,  route: 'Unassigned' },
-        { num: 'KA-51-MM-5555', type: 'Truck',          status: 'Maintenance', driver: 'Rajesh Gowda',     cap: 8000,  route: 'Unassigned' },
-        { num: 'IN-CARGO-901',  type: 'Cargo Plane',    status: 'In Transit',  driver: 'Capt. Sandeep Sen', cap: 85000, route: 'Delhi to Kolkata' },
-        { num: 'TN-22-XY-4321', type: 'Delivery Van',   status: 'Idle',        driver: 'Pradeep Nair',     cap: 2000,  route: 'Unassigned' },
-        { num: 'GJ-05-BZ-7890', type: 'Truck',          status: 'Idle',        driver: 'Haresh Patel',     cap: 15000, route: 'Unassigned' }
+        { num: 'MH-03-TC-1234', type: 'Truck',             status: 'In Transit',  driver: 'Vikram Singh',      cap: 12000, route: 'Mumbai to Bangalore' },
+        { num: 'DL-01-AB-9876', type: 'Delivery Van',      status: 'Idle',        driver: 'Amit Verma',        cap: 1500,  route: 'Unassigned' },
+        { num: 'KA-51-MM-5555', type: 'Truck',             status: 'Maintenance', driver: 'Rajesh Gowda',      cap: 8000,  route: 'Unassigned' },
+        { num: 'IN-CARGO-901',  type: 'Cargo Plane',       status: 'In Transit',  driver: 'Capt. Sandeep Sen',  cap: 85000, route: 'Delhi to Kolkata' },
+        { num: 'TN-22-XY-4321', type: 'Delivery Van',      status: 'Idle',        driver: 'Pradeep Nair',      cap: 2000,  route: 'Unassigned' },
+        { num: 'GJ-05-BZ-7890', type: 'Truck',             status: 'Idle',        driver: 'Haresh Patel',      cap: 15000, route: 'Unassigned' },
+        { num: 'AI-BOE-787',    type: 'Cargo Plane',       status: 'Idle',        driver: 'Capt. Raj Kapoor',   cap: 102000, route: 'Mumbai to New York' },
+        { num: 'AI-AIR-330',    type: 'Cargo Plane',       status: 'In Transit',  driver: 'Capt. Anita Sharma',  cap: 70000, route: 'Delhi to London' },
+        { num: 'MV-BH-01',      type: 'Container Vessel',   status: 'In Transit',  driver: 'Capt. Rahul Verma',   cap: 120000, route: 'Mumbai Port to Dubai Jebel Ali' },
+        { num: 'MV-AC-02',      type: 'Container Vessel',   status: 'In Transit',  driver: 'Capt. Priya Singh',   cap: 98000, route: 'Chennai Port to Singapore Terminal' },
+        { num: 'MV-PS-03',      type: 'Container Vessel',   status: 'Idle',        driver: 'Capt. Arjun Nair',    cap: 150000, route: 'Kochi Port to Rotterdam Terminal' },
+        { num: 'MV-EC-04',      type: 'Container Vessel',   status: 'Maintenance', driver: 'Capt. Meera Devi',    cap: 85000, route: 'Unassigned' }
       ];
       for (const f of fleet) {
         await pool.query(

@@ -50,6 +50,8 @@ const rowToShipment = (row) => ({
   declaredValue: row.declared_value !== null ? parseFloat(row.declared_value) : 0.0,
   recipientPhone: row.recipient_phone,
   customsDescription: row.customs_description,
+  fleetVehicleId: row.fleet_vehicle_id,
+  fleetVehicleName: row.fleet_vehicle_name,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
@@ -76,7 +78,8 @@ const bookShipment = async (req, res, next) => {
     consignmentCategory,
     declaredValue,
     recipientPhone,
-    customsDescription
+    customsDescription,
+    fleetVehicleId
   } = req.body;
 
   try {
@@ -86,11 +89,22 @@ const bookShipment = async (req, res, next) => {
     const senderName = req.user.name;
     const estimatedDeliveryDays = getFallbackDeliveryTime(originCity, destinationCity, shipmentType, parseFloat(weight));
     const id = uuidv4();
+
+    // Look up fleet vehicle name if fleetVehicleId provided
+    let fleetVehicleName = null;
+    if (fleetVehicleId) {
+      const [fleetRows] = await pool.query('SELECT vehicle_number, vehicle_type FROM fleet WHERE id = ?', [fleetVehicleId]);
+      if (fleetRows.length > 0) {
+        fleetVehicleName = `${fleetRows[0].vehicle_type} - ${fleetRows[0].vehicle_number}`;
+      }
+    }
+
     const history = JSON.stringify([{
       status: 'Pending Payment',
       location: originCity,
       timestamp: new Date(),
-      updatedBy: senderName
+      updatedBy: senderName,
+      fleetVehicle: fleetVehicleName
     }]);
 
     await pool.query(
@@ -98,8 +112,9 @@ const bookShipment = async (req, res, next) => {
         (id, tracking_id, sender_id, sender_name, sender_phone, recipient_name, recipient_address, 
          origin_country, origin_city, destination_country, destination_city,
          weight, dim_length, dim_width, dim_height, shipment_type, status, estimated_delivery_days, payment_status, history,
-         item_description, is_metal, govt_id_proof, pickup_date, consignment_category, declared_value, recipient_phone, customs_description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         item_description, is_metal, govt_id_proof, pickup_date, consignment_category, declared_value, recipient_phone, customs_description,
+         fleet_vehicle_id, fleet_vehicle_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, trackingId, senderId, senderName, senderPhone || '', recipientName, recipientAddress, 
         originCountry || 'India', originCity, destinationCountry || 'India', destinationCity,
@@ -109,7 +124,9 @@ const bookShipment = async (req, res, next) => {
         consignmentCategory || 'Parcel',
         declaredValue ? parseFloat(declaredValue) : 0.0,
         recipientPhone || '',
-        customsDescription || null
+        customsDescription || null,
+        fleetVehicleId || null,
+        fleetVehicleName
       ]
     );
 

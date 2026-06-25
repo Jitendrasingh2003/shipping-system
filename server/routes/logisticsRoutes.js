@@ -23,6 +23,7 @@ router.delete('/warehouses/:id', authorize('admin'), deleteWarehouse);
 
 // Fleet
 router.get('/fleet', authorize('admin', 'staff'), getFleet);
+router.get('/fleet/available', authorize('admin', 'staff', 'customer'), getFleet);
 router.post('/fleet', authorize('admin'), createFleet);
 router.put('/fleet/:id', authorize('admin', 'staff'), updateFleet);
 router.delete('/fleet/:id', authorize('admin'), deleteFleet);

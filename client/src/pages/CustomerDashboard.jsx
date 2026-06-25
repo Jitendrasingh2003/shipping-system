@@ -400,6 +400,34 @@ const CustomerDashboard = () => {
   const [recipientPhone, setRecipientPhone] = useState('');
   const [customsDescription, setCustomsDescription] = useState('');
 
+  // Fleet Vehicle Selection State
+  const [availableFleet, setAvailableFleet] = useState([]);
+  const [fleetVehicleId, setFleetVehicleId] = useState('');
+  const [fleetLoading, setFleetLoading] = useState(false);
+
+  // Fetch fleet vehicles when shipment type changes to Air or Ocean
+  useEffect(() => {
+    if (shipmentType === 'Air' || shipmentType === 'Ocean') {
+      const typeMap = { Air: 'Cargo Plane', Ocean: 'Container Vessel' };
+      const vehicleType = typeMap[shipmentType];
+      setFleetLoading(true);
+      axios.get('/logistics/fleet/available')
+        .then(res => {
+          if (res.data.success) {
+            const filtered = res.data.fleet.filter(v => v.vehicleType === vehicleType && v.status !== 'Maintenance');
+            setAvailableFleet(filtered);
+            if (filtered.length > 0) setFleetVehicleId(filtered[0].id);
+            else setFleetVehicleId('');
+          }
+        })
+        .catch(() => setAvailableFleet([]))
+        .finally(() => setFleetLoading(false));
+    } else {
+      setAvailableFleet([]);
+      setFleetVehicleId('');
+    }
+  }, [shipmentType]);
+
   useEffect(() => {
     if (user) {
       if (user.phone && !senderPhone) setSenderPhone(user.phone);
@@ -1269,7 +1297,8 @@ const CustomerDashboard = () => {
         consignmentCategory,
         declaredValue,
         recipientPhone,
-        customsDescription
+        customsDescription,
+        fleetVehicleId: fleetVehicleId || undefined
       });
 
       if (res.data.success) {
@@ -1870,6 +1899,7 @@ const CustomerDashboard = () => {
                           <th className="pb-3">Route</th>
                           <th className="pb-3">Est. Days</th>
                           <th className="pb-3">Service</th>
+                          <th className="pb-3">Fleet Vehicle</th>
                           <th className="pb-3">Status</th>
                           <th className="pb-3">Rating</th>
                           <th className="pb-3 text-right">Actions</th>
@@ -1878,7 +1908,7 @@ const CustomerDashboard = () => {
                       <tbody className="divide-y divide-slate-100">
                         {shipments.length === 0 ? (
                           <tr>
-                            <td colSpan="7" className="py-6 text-center text-slate-400 italic">No shipment records found.</td>
+                            <td colSpan="8" className="py-6 text-center text-slate-400 italic">No shipment records found.</td>
                           </tr>
                         ) : (
                           shipments.map((shipment) => (
@@ -1890,6 +1920,15 @@ const CustomerDashboard = () => {
                                 <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
                                   {shipment.shipmentType}
                                 </span>
+                              </td>
+                              <td className="py-3.5">
+                                {shipment.fleetVehicleName ? (
+                                  <span className="text-[10px] font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                                    {shipment.fleetVehicleName}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 italic text-[10px]">—</span>
+                                )}
                               </td>
                               <td className="py-3.5">
                                 <div className="space-y-1">
@@ -2766,6 +2805,34 @@ const CustomerDashboard = () => {
                         </select>
                       </div>
                     </div>
+
+                    {/* Fleet Vehicle Selection for Air & Ocean */}
+                    {(shipmentType === 'Air' || shipmentType === 'Ocean') && (
+                      <div className="border border-indigo-200 bg-indigo-50/30 p-4 rounded-xl space-y-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1 flex items-center gap-1.5">
+                          {shipmentType === 'Air' ? <span>✈️</span> : <span>🚢</span>}
+                          Select {shipmentType === 'Air' ? 'Aircraft / Cargo Plane' : 'Container Vessel / Ship'}
+                        </label>
+                        {fleetLoading ? (
+                          <div className="text-xs text-slate-400 italic">Loading available fleet...</div>
+                        ) : availableFleet.length === 0 ? (
+                          <div className="text-xs text-amber-600 font-medium">No {shipmentType === 'Air' ? 'aircraft' : 'vessels'} available at the moment.</div>
+                        ) : (
+                          <select value={fleetVehicleId} onChange={(e) => setFleetVehicleId(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                            {availableFleet.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.vehicleNumber} — {v.driverName} ({v.capacity} kg cap.) {v.status === 'In Transit' ? '🔴' : '🟢'}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <p className="text-[9px] text-indigo-400 font-medium">
+                          {shipmentType === 'Air' 
+                            ? 'Select a cargo aircraft for your air shipment.' 
+                            : 'Select a container vessel for your ocean freight.'}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="border-t border-slate-100 pt-4">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">📦 Package Dimensions (cm)</label>
