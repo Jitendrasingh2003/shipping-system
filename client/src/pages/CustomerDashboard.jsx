@@ -23,6 +23,19 @@ const COUNTRIES_AND_CITIES = {
 };
 const CITIES = COUNTRIES_AND_CITIES['India'];
 const SHIPMENT_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
+const DOMESTIC_TYPES = ['Standard', 'Express', 'Air', 'Ocean'];
+const INTERNATIONAL_TYPES = ['Air Cargo', 'Ocean Freight'];
+const getAvailableTypes = (origin, dest) => {
+  const o = (origin || '').toLowerCase();
+  const d = (dest || '').toLowerCase();
+  const isInternational = o !== d && !(o === 'india' && d === 'india');
+  return isInternational ? INTERNATIONAL_TYPES : DOMESTIC_TYPES;
+};
+const getTypeMapping = (type) => {
+  if (type === 'Air Cargo') return 'Air';
+  if (type === 'Ocean Freight') return 'Ocean';
+  return type;
+};
 const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 const VESSEL_DATA = {
@@ -395,6 +408,15 @@ const CustomerDashboard = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    const isIntl = originCountry !== destinationCountry;
+    const types = isIntl ? INTERNATIONAL_TYPES : DOMESTIC_TYPES;
+    const validTypes = types.map(t => getTypeMapping(t));
+    if (!validTypes.includes(shipmentType)) {
+      setShipmentType(validTypes[0]);
+    }
+  }, [originCountry, destinationCountry]);
+
   const handleOriginCountryChange = (country) => {
     setOriginCountry(country);
     const cities = COUNTRIES_AND_CITIES[country] || [];
@@ -421,12 +443,33 @@ const CustomerDashboard = () => {
   const [aiRecommendation, setAiRecommendation] = useState(null);
 
   // Rate Calculator State
+  const [calcOriginCountry, setCalcOriginCountry] = useState('India');
+  const [calcDestCountry, setCalcDestCountry] = useState('India');
   const [calcOrigin, setCalcOrigin] = useState(CITIES[0]);
   const [calcDest, setCalcDest] = useState(CITIES[1]);
   const [calcWeight, setCalcWeight] = useState(1.0);
   const [calcType, setCalcType] = useState(SHIPMENT_TYPES[0]);
   const [calculatedCost, setCalculatedCost] = useState(null);
   const [calculatedDays, setCalculatedDays] = useState(null);
+
+  useEffect(() => {
+    const cities = COUNTRIES_AND_CITIES[calcOriginCountry] || [];
+    if (cities.length > 0) setCalcOrigin(cities[0]);
+  }, [calcOriginCountry]);
+
+  useEffect(() => {
+    const cities = COUNTRIES_AND_CITIES[calcDestCountry] || [];
+    if (cities.length > 0) setCalcDest(cities[0]);
+  }, [calcDestCountry]);
+
+  useEffect(() => {
+    const isIntl = calcOriginCountry !== calcDestCountry;
+    const types = isIntl ? INTERNATIONAL_TYPES : DOMESTIC_TYPES;
+    const validTypes = types.map(t => getTypeMapping(t));
+    if (!validTypes.includes(calcType)) {
+      setCalcType(validTypes[0]);
+    }
+  }, [calcOriginCountry, calcDestCountry]);
 
   // Address Book State
   const [addresses, setAddresses] = useState([]);
@@ -1071,8 +1114,13 @@ const CustomerDashboard = () => {
     if (calcType === 'Express') multiplier = rates.express_multiplier || 1.5;
     else if (calcType === 'Air') multiplier = rates.air_multiplier || 2.5;
     else if (calcType === 'Ocean') multiplier = rates.ocean_multiplier || 0.8;
+
+    let intlSurcharge = 1.0;
+    if (calcOriginCountry !== calcDestCountry) {
+      intlSurcharge = 1.8;
+    }
     
-    const costBeforeTax = (basePrice + (calcWeight * perKgRate)) * multiplier;
+    const costBeforeTax = (basePrice + (calcWeight * perKgRate)) * multiplier * intlSurcharge;
     const cost = costBeforeTax * (1 + (taxPercent / 100));
     setCalculatedCost(Math.round(cost * 100) / 100);
 
@@ -2714,7 +2762,7 @@ const CustomerDashboard = () => {
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Shipment Method</label>
                         <select value={shipmentType} onChange={(e) => setShipmentType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800">
-                          {SHIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          {(originCountry === destinationCountry ? DOMESTIC_TYPES : INTERNATIONAL_TYPES).map(t => <option key={t} value={getTypeMapping(t)}>{t}</option>)}
                         </select>
                       </div>
                     </div>
@@ -3059,15 +3107,29 @@ const CustomerDashboard = () => {
                   <form onSubmit={handleCalculateRate} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From</label>
-                        <select value={calcOrigin} onChange={(e) => setCalcOrigin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
-                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From Country</label>
+                        <select value={calcOriginCountry} onChange={(e) => setCalcOriginCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To Country</label>
+                        <select value={calcDestCountry} onChange={(e) => setCalcDestCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From City</label>
+                        <select value={calcOrigin} onChange={(e) => setCalcOrigin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                          {(COUNTRIES_AND_CITIES[calcOriginCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To City</label>
                         <select value={calcDest} onChange={(e) => setCalcDest(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
-                          {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          {(COUNTRIES_AND_CITIES[calcDestCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                     </div>
@@ -3080,7 +3142,7 @@ const CustomerDashboard = () => {
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Service</label>
                         <select value={calcType} onChange={(e) => setCalcType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
-                          {SHIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          {(calcOriginCountry === calcDestCountry ? DOMESTIC_TYPES : INTERNATIONAL_TYPES).map(t => <option key={t} value={getTypeMapping(t)}>{t}</option>)}
                         </select>
                       </div>
                     </div>
@@ -3095,7 +3157,18 @@ const CustomerDashboard = () => {
                     <div className="space-y-4">
                       <div className="flex justify-between border-b border-slate-100 pb-2">
                         <span className="text-xs text-slate-500 font-semibold">Estimated Cost</span>
-                        <span className="text-xs font-bold text-emerald-600">₹{calculatedCost.toFixed(2)}</span>
+                        <span className="text-xs font-bold text-emerald-600">
+                          {(() => {
+                            const cur = getCurrencyForCountries(calcOriginCountry, calcDestCountry);
+                            const sym = getCurrencySymbol(cur);
+                            let conv = 1.0;
+                            if (cur === 'USD') conv = 0.012;
+                            else if (cur === 'GBP') conv = 0.0095;
+                            else if (cur === 'AED') conv = 0.044;
+                            else if (cur === 'AUD') conv = 0.018;
+                            return `${sym}${(calculatedCost * conv).toFixed(2)}`;
+                          })()}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-xs text-slate-500 font-semibold">Estimated Transit Duration</span>
