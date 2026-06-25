@@ -414,7 +414,7 @@ const CustomerDashboard = () => {
       axios.get('/logistics/fleet/available')
         .then(res => {
           if (res.data.success) {
-            const filtered = res.data.fleet.filter(v => v.vehicleType === vehicleType && v.status !== 'Maintenance');
+            const filtered = res.data.fleet.filter(v => v.vehicleType === vehicleType && v.status === 'Idle');
             setAvailableFleet(filtered);
             if (filtered.length > 0) setFleetVehicleId(filtered[0].id);
             else setFleetVehicleId('');
@@ -2821,7 +2821,7 @@ const CustomerDashboard = () => {
                           <select value={fleetVehicleId} onChange={(e) => setFleetVehicleId(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300">
                             {availableFleet.map(v => (
                               <option key={v.id} value={v.id}>
-                                {v.vehicleNumber} — {v.driverName} ({v.capacity} kg cap.) {v.status === 'In Transit' ? '🔴' : '🟢'}
+                                {v.vehicleNumber} — {v.driverName} ({v.capacity} kg cap.) ✅ Available
                               </option>
                             ))}
                           </select>

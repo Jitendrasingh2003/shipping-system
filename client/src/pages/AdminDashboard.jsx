@@ -1700,17 +1700,24 @@ const AdminDashboard = () => {
                         <td className="p-4 text-slate-700 font-semibold">{vehicle.driverName}</td>
                         <td className="p-4 text-slate-500">{vehicle.currentRoute}</td>
                         <td className="p-4">
-                          <button
-                            onClick={() => handleToggleFleetStatus(vehicle.id, vehicle.status)}
-                            title="Click to toggle status (simulated update)"
-                            className={`px-2 py-1 rounded-full text-[10px] font-bold border transition ${
-                              vehicle.status === 'Idle' ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' :
-                              vehicle.status === 'In Transit' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' :
-                              'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                            }`}
-                          >
-                            {vehicle.status}
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => handleToggleFleetStatus(vehicle.id, vehicle.status)}
+                              title="Click to toggle status (simulated update)"
+                              className={`px-2 py-1 rounded-full text-[10px] font-bold border transition ${
+                                vehicle.status === 'Idle' ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' :
+                                vehicle.status === 'In Transit' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' :
+                                'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                              }`}
+                            >
+                              {vehicle.status}
+                            </button>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full text-center ${
+                              vehicle.status === 'Idle' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                            }`}>
+                              {vehicle.status === 'Idle' ? '✅ Available' : '❌ Not Available'}
+                            </span>
+                          </div>
                         </td>
                         <td className="p-4 text-right">
                           <button
