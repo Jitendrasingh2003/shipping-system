@@ -9,7 +9,8 @@ import {
 import { 
   Package, MapPin, CreditCard, LogOut, RefreshCw, Sparkles, Navigation, CheckCircle, FileText, Download, Clock,
   BookOpen, Heart, HelpCircle, Bell, PlusCircle, Trash2, Shield, Compass, Calculator, Send, AlertTriangle, MessageSquare,
-  BarChart2, Coins, Globe, Bug, Camera, ClipboardList, Phone, User, Anchor, TrendingUp, Ship, Activity
+  BarChart2, Coins, Globe, Bug, Camera, ClipboardList, Phone, User, Anchor, TrendingUp, Ship, Activity,
+  Settings, Gift, Calendar, Undo2, Copy, Check, Award, Star, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -121,10 +122,17 @@ const getCurrencySymbol = (currency) => {
 };
 
 const CustomerDashboard = () => {
-  const { logout, user } = useAuth();
+  const { logout, user, updateProfile, changePassword } = useAuth();
   const socket = useSocket();
 
   const [lang, setLang] = useState('en');
+  const LANGUAGES = ['en', 'hi', 'es', 'fr', 'de', 'ar', 'zh'];
+  const LANG_LABELS = { en: 'EN', hi: 'हि', es: 'ES', fr: 'FR', de: 'DE', ar: 'ع', zh: '中' };
+  const LANG_FULL = { en: 'English', hi: 'हिन्दी', es: 'Español', fr: 'Français', de: 'Deutsch', ar: 'العربية', zh: '中文' };
+  const cycleLang = () => {
+    const idx = LANGUAGES.indexOf(lang);
+    setLang(LANGUAGES[(idx + 1) % LANGUAGES.length]);
+  };
   const t = (key) => {
     const dict = {
       en: {
@@ -147,7 +155,11 @@ const CustomerDashboard = () => {
         supportDeskChat: 'Support Desk Chat',
         billingInvoices: 'Billing Invoices',
         savedAddresses: 'Saved Addresses',
-        notificationFeed: 'Notification Feed'
+        notificationFeed: 'Notification Feed',
+        profileSettings: 'Profile Settings',
+        referrals: 'Refer & Earn',
+        schedule: 'Schedule Calendar',
+        returns: 'Returns & Reverse Pickup'
       },
       hi: {
         totalBookings: 'कुल बुकिंग',
@@ -169,15 +181,177 @@ const CustomerDashboard = () => {
         supportDeskChat: 'सहायता चैट डेस्क',
         billingInvoices: 'बिलिंग इनवॉइस',
         savedAddresses: 'बचाए गए पते',
-        notificationFeed: 'सूचना फ़ीड'
+        notificationFeed: 'सूचना फ़ीड',
+        profileSettings: 'प्रोफ़ाइल सेटिंग्स',
+        referrals: 'रेफर करें और कमाएं',
+        schedule: 'शेड्यूल कैलेंडर',
+        returns: 'रिटर्न और रिवर्स पिकअप'
+      },
+      es: {
+        totalBookings: 'Pedidos Reservados',
+        transitTracker: 'En Tránsito',
+        spendLeaderboard: 'Análisis de Gastos',
+        recentHistory: 'Historial Reciente',
+        activeAlerts: 'Alertas Activas',
+        welcomeBack: 'Bienvenido de nuevo',
+        bookShipment: 'Reservar Envío',
+        billingStatements: 'Estado de Cuenta',
+        transitMap: 'Mapa de Tránsito',
+        supportTickets: 'Tickets de Soporte',
+        warehouseRates: 'Calculadora de Tarifas',
+        myConsignments: 'Mis Envíos',
+        spendLogistics: 'Gastos y Gráficos',
+        bookNewShipment: 'Nuevo Envío',
+        rateCalculator: 'Calculadora de Tarifas',
+        shippingTariff: 'Tarifas de Envío',
+        supportDeskChat: 'Chat de Soporte',
+        billingInvoices: 'Facturas',
+        savedAddresses: 'Direcciones Guardadas',
+        notificationFeed: 'Notificaciones',
+        profileSettings: 'Configuración',
+        referrals: 'Referir y Ganar',
+        schedule: 'Calendario',
+        returns: 'Devoluciones'
+      },
+      fr: {
+        totalBookings: 'Commandes Réservées',
+        transitTracker: 'En Transit',
+        spendLeaderboard: 'Analyse des Dépenses',
+        recentHistory: 'Historique Récent',
+        activeAlerts: 'Alertes Actives',
+        welcomeBack: 'Bon retour',
+        bookShipment: 'Réserver un Envoi',
+        billingStatements: 'Relevés de Facturation',
+        transitMap: 'Carte de Transit',
+        supportTickets: 'Tickets de Support',
+        warehouseRates: 'Calculatrice de Tarifs',
+        myConsignments: 'Mes Envois',
+        spendLogistics: 'Dépenses et Graphiques',
+        bookNewShipment: 'Nouvel Envoi',
+        rateCalculator: 'Calculatrice de Tarifs',
+        shippingTariff: 'Tarifs d\'Expédition',
+        supportDeskChat: 'Chat de Support',
+        billingInvoices: 'Factures',
+        savedAddresses: 'Adresses Enregistrées',
+        notificationFeed: 'Notifications',
+        profileSettings: 'Paramètres',
+        referrals: 'Parrainer et Gagner',
+        schedule: 'Calendrier',
+        returns: 'Retours'
+      },
+      de: {
+        totalBookings: 'Gebuchte Bestellungen',
+        transitTracker: 'In Transit',
+        spendLeaderboard: 'Ausgabenanalyse',
+        recentHistory: 'Letzter Verlauf',
+        activeAlerts: 'Aktive Benachrichtigungen',
+        welcomeBack: 'Willkommen zurück',
+        bookShipment: 'Sendung Buchen',
+        billingStatements: 'Abrechnungen',
+        transitMap: 'Transitkarte',
+        supportTickets: 'Support-Tickets',
+        warehouseRates: 'Tarifrechner',
+        myConsignments: 'Meine Sendungen',
+        spendLogistics: 'Ausgaben und Diagramme',
+        bookNewShipment: 'Neue Sendung',
+        rateCalculator: 'Tarifrechner',
+        shippingTariff: 'Versandtarife',
+        supportDeskChat: 'Support-Chat',
+        billingInvoices: 'Rechnungen',
+        savedAddresses: 'Gespeicherte Adressen',
+        notificationFeed: 'Benachrichtigungen',
+        profileSettings: 'Einstellungen',
+        referrals: 'Empfehlen und Verdienen',
+        schedule: 'Kalender',
+        returns: 'Rücksendungen'
+      },
+      ar: {
+        totalBookings: 'الطلبات المحجوزة',
+        transitTracker: 'قيد النقل',
+        spendLeaderboard: 'تحليل المصروفات',
+        recentHistory: 'السجل الأخير',
+        activeAlerts: 'التنبيهات النشطة',
+        welcomeBack: 'مرحبًا بعودتك',
+        bookShipment: 'حجز شحنة',
+        billingStatements: 'كشوف الفواتير',
+        transitMap: 'خريطة العبور',
+        supportTickets: 'تذاكر الدعم',
+        warehouseRates: 'حاسبة التعرفة',
+        myConsignments: 'شحناتي',
+        spendLogistics: 'المصروفات والرسوم البيانية',
+        bookNewShipment: 'شحنة جديدة',
+        rateCalculator: 'حاسبة الأسعار',
+        shippingTariff: 'تعريفات الشحن',
+        supportDeskChat: 'دردشة الدعم',
+        billingInvoices: 'الفواتير',
+        savedAddresses: 'العناوين المحفوظة',
+        notificationFeed: 'الإشعارات',
+        profileSettings: 'الإعدادات',
+        referrals: 'الإحالة والربح',
+        schedule: 'التقويم',
+        returns: 'المرتجعات'
+      },
+      zh: {
+        totalBookings: '已预订订单',
+        transitTracker: '运输中',
+        spendLeaderboard: '支出分析',
+        recentHistory: '近期历史',
+        activeAlerts: '活跃提醒',
+        welcomeBack: '欢迎回来',
+        bookShipment: '预订发货',
+        billingStatements: '账单报表',
+        transitMap: '运输地图',
+        supportTickets: '支持工单',
+        warehouseRates: '运费计算器',
+        myConsignments: '我的货物',
+        spendLogistics: '支出与图表',
+        bookNewShipment: '新发货',
+        rateCalculator: '费率计算器',
+        shippingTariff: '运费费率',
+        supportDeskChat: '支持聊天',
+        billingInvoices: '发票',
+        savedAddresses: '已保存地址',
+        notificationFeed: '通知',
+        profileSettings: '设置',
+        referrals: '推荐与赚取',
+        schedule: '日程日历',
+        returns: '退货与逆向取件'
       }
     };
     return dict[lang][key] || key;
   };
 
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'book' | 'calculator' | 'tickets' | 'invoices' | 'address' | 'alerts' | 'rates'
+  const [activeTab, setActiveTab] = useState('orders');
   const [stats, setStats] = useState(null);
   const [shipments, setShipments] = useState([]);
+
+  // Profile Settings State
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileUpdating, setProfileUpdating] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPwd, setChangingPwd] = useState(false);
+
+  // Referral & Rewards State
+  const [referralData, setReferralData] = useState(null);
+  const [referralInput, setReferralInput] = useState('');
+  const [referralApplied, setReferralApplied] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
+
+  // Schedule Calendar State
+  const [scheduleShipments, setScheduleShipments] = useState([]);
+  const now = new Date();
+  const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
+  const [calendarYear, setCalendarYear] = useState(now.getFullYear());
+
+  // Returns State
+  const [returns, setReturns] = useState([]);
+  const [returnShipmentId, setReturnShipmentId] = useState('');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnPickupAddress, setReturnPickupAddress] = useState('');
+  const [returnPickupDate, setReturnPickupDate] = useState('');
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -214,8 +388,10 @@ const CustomerDashboard = () => {
   const [customsDescription, setCustomsDescription] = useState('');
 
   useEffect(() => {
-    if (user && user.phone && !senderPhone) {
-      setSenderPhone(user.phone);
+    if (user) {
+      if (user.phone && !senderPhone) setSenderPhone(user.phone);
+      if (!profileName && user.name) setProfileName(user.name);
+      if (!profilePhone && user.phone) setProfilePhone(user.phone);
     }
   }, [user]);
 
@@ -697,6 +873,149 @@ const CustomerDashboard = () => {
       ]);
     } finally {
       setFloatingLoading(false);
+    }
+  };
+
+  // ── Profile Handlers ──
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setProfileUpdating(true);
+    const res = await updateProfile({ name: profileName, phone: profilePhone });
+    if (res.success) {
+      toast.success('Profile updated successfully!');
+    } else {
+      toast.error(res.message || 'Failed to update profile.');
+    }
+    setProfileUpdating(false);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) {
+      return toast.error('Please fill in both password fields.');
+    }
+    if (newPassword.length < 6) {
+      return toast.error('New password must be at least 6 characters.');
+    }
+    setChangingPwd(true);
+    const res = await changePassword(currentPassword, newPassword);
+    if (res.success) {
+      toast.success('Password changed successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+    } else {
+      toast.error(res.message || 'Failed to change password.');
+    }
+    setChangingPwd(false);
+  };
+
+  // ── Referral Handlers ──
+  const fetchReferralData = async () => {
+    try {
+      const res = await axios.get('/auth/referral');
+      if (res.data.success) setReferralData(res.data);
+    } catch (err) { /* ignore */ }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'referrals') fetchReferralData();
+  }, [activeTab]);
+
+  const handleCopyReferralCode = () => {
+    if (referralData?.referralCode) {
+      navigator.clipboard.writeText(referralData.referralCode);
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 2000);
+      toast.success('Referral code copied!');
+    }
+  };
+
+  const handleApplyReferral = async () => {
+    if (!referralInput.trim()) return toast.error('Enter a referral code.');
+    try {
+      const res = await axios.post('/auth/referral/apply', { code: referralInput.trim() });
+      if (res.data.success) {
+        toast.success('Referral applied! You earned 25 points!');
+        setReferralApplied(true);
+        fetchReferralData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Invalid referral code.');
+    }
+  };
+
+  // ── Schedule Calendar ──
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      const upcoming = shipments.filter(s =>
+        s.status !== 'Delivered' && s.status !== 'Cancelled'
+      );
+      setScheduleShipments(upcoming);
+    }
+  }, [activeTab, shipments]);
+
+  const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
+
+  const prevMonth = () => {
+    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(calendarYear - 1); }
+    else setCalendarMonth(calendarMonth - 1);
+  };
+  const nextMonth = () => {
+    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(calendarYear + 1); }
+    else setCalendarMonth(calendarMonth + 1);
+  };
+
+  const getShipmentsForDay = (day) => {
+    if (!scheduleShipments) return [];
+    const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return scheduleShipments.filter(s => {
+      if (!s.pickupDate && !s.createdAt) return false;
+      const sDate = s.pickupDate ? s.pickupDate.split('T')[0] : s.createdAt.split('T')[0];
+      return sDate === dateStr;
+    });
+  };
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // ── Returns / Reverse Pickup ──
+  const fetchReturns = async () => {
+    try {
+      const res = await axios.get('/shipments/returns');
+      if (res.data.success) setReturns(res.data.returns);
+    } catch (err) { /* ignore */ }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'returns') fetchReturns();
+  }, [activeTab]);
+
+  const handleSubmitReturn = async (e) => {
+    e.preventDefault();
+    if (!returnShipmentId || !returnReason || !returnPickupAddress) {
+      return toast.error('Please fill in all required fields.');
+    }
+    setReturnSubmitting(true);
+    try {
+      const res = await axios.post('/shipments/return', {
+        shipmentId: returnShipmentId,
+        reason: returnReason,
+        pickupAddress: returnPickupAddress,
+        pickupDate: returnPickupDate || null
+      });
+      if (res.data.success) {
+        toast.success('Return request submitted successfully!');
+        setReturnShipmentId('');
+        setReturnReason('');
+        setReturnPickupAddress('');
+        setReturnPickupDate('');
+        fetchReturns();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit return request.');
+    } finally {
+      setReturnSubmitting(false);
     }
   };
 
@@ -1332,12 +1651,15 @@ const CustomerDashboard = () => {
             </div>
             {/* Language Toggle */}
             <button
-              onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
-              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition flex items-center space-x-1"
-              title="Toggle Language"
+              onClick={cycleLang}
+              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition flex items-center space-x-1 relative group"
+              title={LANG_FULL[lang]}
             >
               <Globe size={13} />
-              <span className="uppercase text-[9px] font-extrabold">{lang}</span>
+              <span className="uppercase text-[9px] font-extrabold">{LANG_LABELS[lang] || lang}</span>
+              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">
+                {LANG_FULL[lang]}
+              </span>
             </button>
           </div>
 
@@ -1353,7 +1675,11 @@ const CustomerDashboard = () => {
               { id: 'tickets', label: t('supportTickets'), icon: HelpCircle },
               { id: 'invoices', label: t('billingInvoices'), icon: FileText },
               { id: 'address', label: t('savedAddresses'), icon: BookOpen },
-              { id: 'alerts', label: t('notificationFeed'), icon: Bell }
+              { id: 'alerts', label: t('notificationFeed'), icon: Bell },
+              { id: 'profile', label: t('profileSettings'), icon: Settings },
+              { id: 'referrals', label: t('referrals'), icon: Gift },
+              { id: 'schedule', label: t('schedule'), icon: Calendar },
+              { id: 'returns', label: t('returns'), icon: Undo2 }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -3105,6 +3431,290 @@ const CustomerDashboard = () => {
                     <Send size={16} />
                   </button>
                 </form>
+              </div>
+            )}
+
+            {/* TAB: PROFILE SETTINGS */}
+            {activeTab === 'profile' && (
+              <div className="animate-fade-in space-y-6 max-w-2xl">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5 flex items-center gap-2">
+                    <Settings size={16} /> {t('profileSettings')}
+                  </h3>
+                  <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Name</label>
+                      <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</label>
+                      <input type="email" value={user?.email || ''} disabled
+                        className="w-full bg-slate-100 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-500 cursor-not-allowed" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</label>
+                      <input type="text" value={profilePhone} onChange={e => setProfilePhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <button type="submit" disabled={profileUpdating}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50">
+                      {profileUpdating ? 'Updating...' : 'Update Profile'}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5">Change Password</h3>
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Current Password</label>
+                      <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">New Password</label>
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <button type="submit" disabled={changingPwd}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50">
+                      {changingPwd ? 'Changing...' : 'Change Password'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: REFERRALS & REWARDS */}
+            {activeTab === 'referrals' && (
+              <div className="animate-fade-in space-y-6 max-w-2xl">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                      <Gift size={16} /> {t('referrals')}
+                    </h3>
+                    {referralData && (
+                      <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200">
+                        {referralData.totalPoints} Points
+                      </span>
+                    )}
+                  </div>
+
+                  {referralData && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                        <label className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block mb-1">Your Referral Code</label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-black text-indigo-700 tracking-widest">{referralData.referralCode}</span>
+                          <button onClick={handleCopyReferralCode}
+                            className="p-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition">
+                            {referralCopied ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-indigo-500 mt-1">Share this code with friends. You both earn rewards!</p>
+                      </div>
+
+                      {/* Apply Referral */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Have a referral code?</label>
+                        <div className="flex gap-2">
+                          <input type="text" value={referralInput} onChange={e => setReferralInput(e.target.value)}
+                            placeholder="Enter referral code..."
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                          <button onClick={handleApplyReferral} disabled={referralApplied}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50">
+                            {referralApplied ? 'Applied!' : 'Apply'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rewards History */}
+                  {referralData?.rewards?.length > 0 && (
+                    <div className="mt-6 pt-5 border-t border-slate-100">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Rewards History</h4>
+                      <div className="space-y-2">
+                        {referralData.rewards.map(r => (
+                          <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <Award size={14} className="text-amber-500" />
+                              <div>
+                                <p className="text-xs font-bold text-slate-700">{r.description}</p>
+                                <span className="text-[9px] text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-black text-amber-600">+{r.points} pts</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Referral History */}
+                  {referralData?.referrals?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">People You Referred</h4>
+                      <div className="space-y-2">
+                        {referralData.referrals.map(ref => (
+                          <div key={ref.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">{ref.referred_name || 'New User'}</p>
+                              <span className="text-[9px] text-slate-400">{ref.referred_email}</span>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${
+                              ref.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {ref.status} +{ref.reward_earned}pts
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SCHEDULE CALENDAR */}
+            {activeTab === 'schedule' && (
+              <div className="animate-fade-in max-w-2xl">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5 flex items-center gap-2">
+                    <Calendar size={16} /> {t('schedule')}
+                  </h3>
+
+                  {/* Calendar Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <button onClick={prevMonth} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 transition text-xs font-bold">&larr; Prev</button>
+                    <h4 className="text-sm font-black text-slate-800">{monthNames[calendarMonth]} {calendarYear}</h4>
+                    <button onClick={nextMonth} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 transition text-xs font-bold">Next &rarr;</button>
+                  </div>
+
+                  {/* Day Names */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {dayNames.map(d => (
+                      <div key={d} className="text-center text-[9px] font-bold text-slate-400 uppercase tracking-wider py-1">{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: getFirstDayOfMonth(calendarMonth, calendarYear) }).map((_, i) => (
+                      <div key={`empty-${i}`} className="h-20 p-1 rounded-xl" />
+                    ))}
+                    {Array.from({ length: getDaysInMonth(calendarMonth, calendarYear) }).map((_, i) => {
+                      const day = i + 1;
+                      const dayShipments = getShipmentsForDay(day);
+                      const isToday = day === new Date().getDate() && calendarMonth === new Date().getMonth() && calendarYear === new Date().getFullYear();
+                      return (
+                        <div key={day} className={`h-20 p-1 rounded-xl border transition relative ${
+                          isToday ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                        }`}>
+                          <span className={`text-[10px] font-bold ${isToday ? 'text-indigo-600' : 'text-slate-500'}`}>{day}</span>
+                          <div className="mt-1 space-y-0.5">
+                            {dayShipments.slice(0, 2).map(s => (
+                              <div key={s.id} className={`text-[7px] font-bold px-1 py-0.5 rounded truncate ${
+                                s.status === 'Booked' ? 'bg-blue-100 text-blue-700' :
+                                s.status === 'In Transit' ? 'bg-amber-100 text-amber-700' :
+                                s.status === 'Out for Delivery' ? 'bg-green-100 text-green-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {s.trackingId?.slice(0, 8)}
+                              </div>
+                            ))}
+                            {dayShipments.length > 2 && (
+                              <span className="text-[7px] text-indigo-500 font-bold">+{dayShipments.length - 2} more</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-3">
+                    {[{ label: 'Booked', color: 'bg-blue-100 text-blue-700' },
+                      { label: 'In Transit', color: 'bg-amber-100 text-amber-700' },
+                      { label: 'Out for Delivery', color: 'bg-green-100 text-green-700' }
+                    ].map(l => (
+                      <span key={l.label} className={`text-[9px] font-bold px-2 py-0.5 rounded ${l.color}`}>{l.label}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: RETURNS & REVERSE PICKUP */}
+            {activeTab === 'returns' && (
+              <div className="animate-fade-in space-y-6 max-w-2xl">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400 mb-5 flex items-center gap-2">
+                    <Undo2 size={16} /> {t('returns')}
+                  </h3>
+
+                  <form onSubmit={handleSubmitReturn} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Delivered Shipment *</label>
+                      <select value={returnShipmentId} onChange={e => setReturnShipmentId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition">
+                        <option value="">-- Select Shipment --</option>
+                        {shipments.filter(s => s.status === 'Delivered').map(s => (
+                          <option key={s.id} value={s.id}>{s.trackingId} - {s.recipientName} ({s.destinationCity})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Reason for Return *</label>
+                      <textarea value={returnReason} onChange={e => setReturnReason(e.target.value)} rows={3}
+                        placeholder="Describe why you want to return this shipment..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Pickup Address *</label>
+                      <textarea value={returnPickupAddress} onChange={e => setReturnPickupAddress(e.target.value)} rows={2}
+                        placeholder="Enter pickup address for the return..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Preferred Pickup Date</label>
+                      <input type="date" value={returnPickupDate} onChange={e => setReturnPickupDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition" />
+                    </div>
+                    <button type="submit" disabled={returnSubmitting}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50">
+                      {returnSubmitting ? 'Submitting...' : 'Submit Return Request'}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Returns History */}
+                {returns.length > 0 && (
+                  <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Your Return Requests</h4>
+                    <div className="space-y-3">
+                      {returns.map(r => (
+                        <div key={r.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-bold text-slate-800">{r.tracking_id}</span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                r.status === 'requested' ? 'bg-blue-50 text-blue-700' :
+                                r.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
+                                r.status === 'rejected' ? 'bg-red-50 text-red-700' :
+                                r.status === 'picked_up' ? 'bg-amber-50 text-amber-700' :
+                                'bg-green-50 text-green-700'
+                              }`}>{r.status}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500">Reason: {r.reason}</p>
+                            <p className="text-[9px] text-slate-400 mt-0.5">Requested: {new Date(r.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

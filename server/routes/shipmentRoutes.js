@@ -20,7 +20,10 @@ const {
   getStaffPerformance,
   bulkAssignShipments,
   blockUnblockUser,
-  manageRefund
+  manageRefund,
+  requestReturn,
+  getCustomerReturns,
+  updateReturnStatus
 } = require('../controllers/shipmentController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -50,6 +53,11 @@ router.put('/:shipmentId/refund', protect, authorize('admin'), manageRefund);
 
 // Shared Admin/Staff status updater
 router.put('/:shipmentId/status', protect, authorize('admin', 'staff'), updateShipmentStatus);
+
+// Return / Reverse Pickup Routes
+router.post('/return', protect, authorize('customer'), requestReturn);
+router.get('/returns', protect, authorize('customer'), getCustomerReturns);
+router.put('/returns/:returnId/status', protect, authorize('admin', 'staff'), updateReturnStatus);
 
 // Support Ticket Routes
 router.get('/tickets', protect, authorize('admin', 'customer', 'staff'), getUserTickets);

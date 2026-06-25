@@ -745,6 +745,75 @@ const manageRefund = async (req, res, next) => {
   }
 };
 
+const requestReturn = async (req, res, next) => {
+  const { shipmentId, reason, pickupAddress, pickupDate } = req.body;
+  if (!shipmentId || !reason || !pickupAddress) {
+    return res.status(400).json({ success: false, message: 'Shipment ID, reason, and pickup address are required.' });
+  }
+  try {
+    const pool = getMySQLPool();
+    const [rows] = await pool.query('SELECT * FROM shipments WHERE id = ? AND sender_id = ?', [shipmentId, req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Shipment not found or unauthorized.' });
+    const shipment = rowToShipment(rows[0]);
+    if (shipment.status !== 'Delivered') return res.status(400).json({ success: false, message: 'Only delivered shipments can be returned.' });
+    const [existing] = await pool.query('SELECT * FROM returns WHERE shipment_id = ?', [shipmentId]);
+    if (existing.length > 0) return res.status(400).json({ success: false, message: 'Return already requested for this shipment.' });
+    const id = uuidv4();
+    await pool.query(
+      'INSERT INTO returns (id, shipment_id, user_id, reason, pickup_address, pickup_date, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, shipmentId, req.user.id, reason, pickupAddress, pickupDate || null, 'requested']
+    );
+    await pool.query(
+      'INSERT INTO notifications (id, user_id, title, message, type, shipment_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuidv4(), req.user.id, 'Return Request Submitted',
+       `Return request for shipment ${shipment.trackingId} has been submitted. We will contact you soon.`, 'general', shipmentId]
+    );
+    res.status(201).json({ success: true, message: 'Return request submitted successfully.', returnId: id });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getCustomerReturns = async (req, res, next) => {
+  try {
+    const pool = getMySQLPool();
+    const [rows] = await pool.query(
+      `SELECT r.*, s.tracking_id, s.shipment_type, s.origin_city, s.destination_city, s.status as shipment_status
+       FROM returns r JOIN shipments s ON r.shipment_id = s.id
+       WHERE r.user_id = ? ORDER BY r.created_at DESC`, [req.user.id]
+    );
+    res.status(200).json({ success: true, returns: rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateReturnStatus = async (req, res, next) => {
+  const { returnId } = req.params;
+  const { status, adminNotes } = req.body;
+  if (!['approved', 'rejected', 'picked_up', 'completed'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'Invalid status.' });
+  }
+  try {
+    const pool = getMySQLPool();
+    const [rows] = await pool.query('SELECT * FROM returns WHERE id = ?', [returnId]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Return not found.' });
+    await pool.query(
+      'UPDATE returns SET status = ?, admin_notes = ? WHERE id = ?',
+      [status, adminNotes || null, returnId]
+    );
+    const ret = rows[0];
+    await pool.query(
+      'INSERT INTO notifications (id, user_id, title, message, type, shipment_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuidv4(), ret.user_id, `Return ${status}`,
+       `Your return request has been ${status}. ${adminNotes ? 'Notes: ' + adminNotes : ''}`, 'general', ret.shipment_id]
+    );
+    res.status(200).json({ success: true, message: `Return ${status} successfully.` });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   bookShipment,
   getShipmentByTrackingId,
@@ -765,5 +834,8 @@ module.exports = {
   getStaffPerformance,
   bulkAssignShipments,
   blockUnblockUser,
-  manageRefund
+  manageRefund,
+  requestReturn,
+  getCustomerReturns,
+  updateReturnStatus
 };

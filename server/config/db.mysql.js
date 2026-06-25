@@ -415,6 +415,78 @@ const initTables = async () => {
       }
     }
 
+    // REFERRALS
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS referrals (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          referral_code VARCHAR(20) NOT NULL UNIQUE,
+          referred_email VARCHAR(255) DEFAULT NULL,
+          referred_name VARCHAR(255) DEFAULT NULL,
+          reward_earned DECIMAL(10, 2) DEFAULT 0.0,
+          status VARCHAR(50) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('📝 MySQL: Created referrals table.');
+    } catch (err) {
+      if (err.errno !== 1050) console.error('❌ Failed to create referrals table:', err.message);
+    }
+
+    // REWARDS
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS rewards (
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36) NOT NULL,
+          points INT DEFAULT 0,
+          reward_type VARCHAR(100) DEFAULT 'referral',
+          description TEXT,
+          claimed TINYINT(1) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('📝 MySQL: Created rewards table.');
+    } catch (err) {
+      if (err.errno !== 1050) console.error('❌ Failed to create rewards table:', err.message);
+    }
+
+    // Add referral_code and reward_points columns to users table
+    try {
+      await connection.query("ALTER TABLE users ADD COLUMN referral_code VARCHAR(20) DEFAULT NULL");
+      console.log('📝 MySQL: Added referral_code column to users table.');
+    } catch (err) {
+      if (err.errno !== 1060) console.error('❌ Failed to add referral_code:', err.message);
+    }
+    try {
+      await connection.query("ALTER TABLE users ADD COLUMN reward_points INT DEFAULT 0");
+      console.log('📝 MySQL: Added reward_points column to users table.');
+    } catch (err) {
+      if (err.errno !== 1060) console.error('❌ Failed to add reward_points:', err.message);
+    }
+
+    // SHIPMENT RETURNS
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS returns (
+          id VARCHAR(36) PRIMARY KEY,
+          shipment_id VARCHAR(36) NOT NULL,
+          user_id VARCHAR(36) NOT NULL,
+          reason TEXT NOT NULL,
+          pickup_address TEXT NOT NULL,
+          pickup_date DATETIME DEFAULT NULL,
+          status VARCHAR(50) DEFAULT 'requested',
+          admin_notes TEXT DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('📝 MySQL: Created returns table.');
+    } catch (err) {
+      if (err.errno !== 1050) console.error('❌ Failed to create returns table:', err.message);
+    }
+
     console.log('🐬 MySQL: All tables checked/created successfully.');
     connection.release();
   } catch (error) {

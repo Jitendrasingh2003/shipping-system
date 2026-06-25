@@ -227,6 +227,124 @@ const deleteUserAddress = async (req, res, next) => {
   }
 };
 
+const updateProfile = async (req, res, next) => {
+  const { name, phone } = req.body;
+  try {
+    const pool = getMySQLPool();
+    const updates = [];
+    const values = [];
+    if (name) { updates.push('name = ?'); values.push(name); }
+    if (phone !== undefined) { updates.push('phone = ?'); values.push(phone); }
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update.' });
+    }
+    values.push(req.user.id);
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+    const [rows] = await pool.query('SELECT id, name, email, role, phone FROM users WHERE id = ?', [req.user.id]);
+    res.status(200).json({ success: true, message: 'Profile updated successfully.', user: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Current and new password are required.' });
+  }
+  try {
+    const pool = getMySQLPool();
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found.' });
+    const isMatch = await bcrypt.compare(currentPassword, rows[0].password);
+    if (!isMatch) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashed, req.user.id]);
+    res.status(200).json({ success: true, message: 'Password changed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReferralInfo = async (req, res, next) => {
+  try {
+    const pool = getMySQLPool();
+    const userId = req.user.id;
+    let [userRows] = await pool.query('SELECT referral_code, reward_points FROM users WHERE id = ?', [userId]);
+    if (userRows.length === 0) return res.status(404).json({ success: false, message: 'User not found.' });
+    let referralCode = userRows[0].referral_code;
+    if (!referralCode) {
+      referralCode = 'SMT' + userId.slice(0, 6).toUpperCase();
+      await pool.query('UPDATE users SET referral_code = ? WHERE id = ?', [referralCode, userId]);
+    }
+    const [referrals] = await pool.query(
+      'SELECT * FROM referrals WHERE user_id = ? ORDER BY created_at DESC', [userId]
+    );
+    const [rewards] = await pool.query(
+      'SELECT * FROM rewards WHERE user_id = ? ORDER BY created_at DESC', [userId]
+    );
+    const totalPoints = userRows[0].reward_points || 0;
+    res.status(200).json({
+      success: true,
+      referralCode,
+      totalPoints,
+      referrals,
+      rewards
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const applyReferral = async (req, res, next) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ success: false, message: 'Referral code is required.' });
+  try {
+    const pool = getMySQLPool();
+    const [refereeRows] = await pool.query('SELECT id, name, referral_code FROM users WHERE referral_code = ?', [code]);
+    if (refereeRows.length === 0) return res.status(404).json({ success: false, message: 'Invalid referral code.' });
+    const referee = refereeRows[0];
+    if (referee.id === req.user.id) return res.status(400).json({ success: false, message: 'Cannot use your own referral code.' });
+    const [existing] = await pool.query('SELECT * FROM referrals WHERE referred_email = (SELECT email FROM users WHERE id = ?)', [req.user.id]);
+    if (existing.length > 0) return res.status(400).json({ success: false, message: 'Referral already applied.' });
+    const referralId = uuidv4();
+    const rewardId = uuidv4();
+    const points = 100;
+    await pool.query(
+      'INSERT INTO referrals (id, user_id, referral_code, referred_email, referred_name, reward_earned, status) VALUES (?, ?, ?, (SELECT email FROM users WHERE id = ?), (SELECT name FROM users WHERE id = ?), ?, ?)',
+      [referralId, referee.id, code, req.user.id, req.user.id, points, 'completed']
+    );
+    await pool.query(
+      'INSERT INTO rewards (id, user_id, points, reward_type, description) VALUES (?, ?, ?, ?, ?)',
+      [rewardId, referee.id, points, 'referral', `Referred user earned you ${points} reward points.`]
+    );
+    await pool.query('UPDATE users SET reward_points = reward_points + ? WHERE id = ?', [points, referee.id]);
+    await pool.query(
+      'INSERT INTO rewards (id, user_id, points, reward_type, description) VALUES (?, ?, ?, ?, ?)',
+      [uuidv4(), req.user.id, 25, 'signup_bonus', 'Welcome! You earned 25 points for joining via referral.']
+    );
+    await pool.query('UPDATE users SET reward_points = reward_points + 25 WHERE id = ?', [req.user.id]);
+    res.status(200).json({ success: true, message: 'Referral applied! You both earned rewards.', points });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const claimReward = async (req, res, next) => {
+  const { rewardId } = req.params;
+  try {
+    const pool = getMySQLPool();
+    const [rows] = await pool.query('SELECT * FROM rewards WHERE id = ? AND user_id = ?', [rewardId, req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Reward not found.' });
+    if (rows[0].claimed) return res.status(400).json({ success: false, message: 'Reward already claimed.' });
+    await pool.query('UPDATE rewards SET claimed = 1 WHERE id = ?', [rewardId]);
+    res.status(200).json({ success: true, message: 'Reward claimed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -235,5 +353,10 @@ module.exports = {
   getUserAddresses,
   createUserAddress,
   deleteUserAddress,
-  sendOtp
+  sendOtp,
+  updateProfile,
+  changePassword,
+  getReferralInfo,
+  applyReferral,
+  claimReward
 };

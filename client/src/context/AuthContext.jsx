@@ -89,6 +89,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (data) => {
+    try {
+      const response = await axios.put('/auth/profile', data);
+      if (response.data.success) {
+        setUser(response.data.user);
+        return { success: true, user: response.data.user };
+      }
+    } catch (err) {
+      return { success: false, message: err.response?.data?.message || 'Failed to update profile.' };
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      const response = await axios.put('/auth/change-password', { currentPassword, newPassword });
+      return { success: true, message: response.data.message };
+    } catch (err) {
+      return { success: false, message: err.response?.data?.message || 'Failed to change password.' };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setToken(null);
@@ -97,7 +118,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, fetchCurrentUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, fetchCurrentUser, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
