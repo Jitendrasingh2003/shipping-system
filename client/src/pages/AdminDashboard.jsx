@@ -575,10 +575,10 @@ const AdminDashboard = () => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative">
+    <div className="min-h-screen md:h-screen md:overflow-hidden bg-slate-50 flex flex-col md:flex-row relative">
       
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
+      <aside className="w-full md:w-64 md:h-screen md:sticky md:top-0 overflow-y-auto bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
         <div className="space-y-6">
           
           {/* Logo */}
@@ -1752,7 +1752,7 @@ const AdminDashboard = () => {
                     type="number"
                     value={rates.base_fare || 0}
                     onChange={(e) => handleRateChange('base_fare', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1762,7 +1762,7 @@ const AdminDashboard = () => {
                     type="number"
                     value={rates.tax_rate || 0}
                     onChange={(e) => handleRateChange('tax_rate', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1772,7 +1772,7 @@ const AdminDashboard = () => {
                     type="number"
                     value={rates.per_kg_fare || 0}
                     onChange={(e) => handleRateChange('per_kg_fare', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1783,7 +1783,7 @@ const AdminDashboard = () => {
                     step="0.1"
                     value={rates.express_multiplier || 0}
                     onChange={(e) => handleRateChange('express_multiplier', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1794,7 +1794,7 @@ const AdminDashboard = () => {
                     step="0.1"
                     value={rates.air_multiplier || 0}
                     onChange={(e) => handleRateChange('air_multiplier', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1805,7 +1805,7 @@ const AdminDashboard = () => {
                     step="0.1"
                     value={rates.ocean_multiplier || 0}
                     onChange={(e) => handleRateChange('ocean_multiplier', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800"
                     required
                   />
                 </div>
@@ -1959,7 +1959,7 @@ const AdminDashboard = () => {
 
         {/* TAB 7: SUPPORT CHAT DESK */}
         {activeTab === 'chats' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[600px] overflow-hidden animate-fade-in">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[600px] md:h-[calc(100vh-120px)] overflow-hidden animate-fade-in">
             
             {/* Chats List Sidebar */}
             <div className="lg:col-span-4 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col h-full overflow-hidden">
@@ -2080,7 +2080,7 @@ const AdminDashboard = () => {
                   type="number"
                   value={baseFare}
                   onChange={(e) => setBaseFare(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-medium text-slate-800"
                 />
               </div>
 
@@ -2090,7 +2090,7 @@ const AdminDashboard = () => {
                   type="number"
                   value={taxRate}
                   onChange={(e) => setTaxRate(parseInt(e.target.value) || 0)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-medium text-slate-800"
                 />
               </div>
 
@@ -2310,9 +2310,11 @@ const AdminDashboard = () => {
                     required
                   >
                     <option value="Truck">Truck</option>
-                    <option value="Container Ship">Container Ship</option>
+                    <option value="Container Vessel">Container Vessel / Ship</option>
                     <option value="Delivery Van">Delivery Van</option>
                     <option value="Cargo Plane">Cargo Plane</option>
+                    <option value="Express Van">Express Van</option>
+                    <option value="Express Bike">Express Bike</option>
                   </select>
                 </div>
                 <div>

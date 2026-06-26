@@ -106,6 +106,7 @@ const StaffDashboard = () => {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [currentLocation, setCurrentLocation] = useState('');
+  const [selectedWarehouseName, setSelectedWarehouseName] = useState('');
   const [updating, setUpdating] = useState(false);
   const [otp, setOtp] = useState('');
   const [qrModal, setQrModal] = useState(false);
@@ -463,13 +464,15 @@ const StaffDashboard = () => {
         status: newStatus,
         location: currentLocation.trim(),
         signature,
-        otp: newStatus === 'Delivered' ? otp.trim() : undefined
+        otp: newStatus === 'Delivered' ? otp.trim() : undefined,
+        warehouseName: selectedWarehouseName || undefined
       });
       if (res.data.success) {
         toast.success(`Shipment status updated to: ${newStatus}`);
         setStatusModal(false);
         setNewStatus('');
         setCurrentLocation('');
+        setSelectedWarehouseName('');
         setDeliveryPhoto(null);
         setOtp('');
         fetchData();
@@ -530,10 +533,10 @@ const StaffDashboard = () => {
   const successRate = totalAssigned === 0 ? 100 : Math.round((completedAssigned / totalAssigned) * 100);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative">
+    <div className="min-h-screen md:h-screen md:overflow-hidden bg-slate-50 flex flex-col md:flex-row relative">
       
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
+      <aside className="w-full md:w-64 md:h-screen md:sticky md:top-0 overflow-y-auto bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
         <div className="space-y-6">
           
           {/* Logo */}
@@ -754,9 +757,19 @@ const StaffDashboard = () => {
                           <td className="py-3.5 font-medium text-slate-700">{s.recipientName}</td>
                           <td className="py-3.5">{s.originCity} → {s.destinationCity}</td>
                           <td className="py-3.5">
-                            <span className="px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700">
-                              {s.shipmentType}
-                            </span>
+                            <div className="space-y-1">
+                              <span className="px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-700 block w-max">
+                                {s.shipmentType}
+                              </span>
+                              {s.warehouseName && (
+                                <div className="text-[10px] font-medium text-slate-600 flex items-center gap-1">
+                                  <span>🏢</span>
+                                  <span className="truncate max-w-[120px]" title={s.warehouseName}>
+                                    {s.warehouseName}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3.5">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -848,6 +861,11 @@ const StaffDashboard = () => {
                             {task.govtIdProof && (
                               <span className="block text-[9px] text-slate-400 font-extrabold bg-slate-100 border border-slate-200 px-1 py-0.5 rounded w-max mt-0.5">
                                 ID: {task.govtIdProof}
+                              </span>
+                            )}
+                            {task.warehouseName && (
+                              <span className="block text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1 py-0.5 rounded w-max mt-0.5">
+                                🏢 {task.warehouseName}
                               </span>
                             )}
                             <h4 className="text-xs font-bold text-slate-800">To: {task.recipientName}</h4>
@@ -1008,6 +1026,11 @@ const StaffDashboard = () => {
                         {s.govtIdProof && (
                           <span className="block text-[9px] text-slate-400 font-extrabold bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded w-max mt-0.5">
                             ID: {s.govtIdProof}
+                          </span>
+                        )}
+                        {s.warehouseName && (
+                          <span className="block text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded w-max mt-0.5">
+                            🏢 {s.warehouseName}
                           </span>
                         )}
                         <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{s.shipmentType} Shipping</span>
@@ -1435,9 +1458,19 @@ const StaffDashboard = () => {
                         <td className="py-3.5 font-medium">{s.recipientName}</td>
                         <td className="py-3.5">{s.originCity} → {s.destinationCity}</td>
                         <td className="py-3.5">
-                          <span className="px-2 py-0.5 rounded font-bold bg-slate-50 text-slate-600 border border-slate-100">
-                            {s.shipmentType}
-                          </span>
+                          <div className="space-y-1">
+                            <span className="px-2 py-0.5 rounded font-bold bg-slate-50 text-slate-600 border border-slate-100 block w-max">
+                              {s.shipmentType}
+                            </span>
+                            {s.warehouseName && (
+                              <div className="text-[10px] font-medium text-slate-600 flex items-center gap-1">
+                                <span>🏢</span>
+                                <span className="truncate max-w-[120px]" title={s.warehouseName}>
+                                  {s.warehouseName}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3.5 text-slate-600 font-medium">
                           {s.history?.[s.history.length - 1]?.location || 'N/A'}
@@ -1674,6 +1707,29 @@ const StaffDashboard = () => {
                   <option value="In Transit">In Transit (Moving between cities/hubs)</option>
                   <option value="Out for Delivery">Out for Delivery (Near customer address)</option>
                   <option value="Delivered">Delivered (Handed to customer)</option>
+                </select>
+              </div>
+
+              {/* Registered Warehouse Selector */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Registered Warehouse (Optional)</label>
+                <select
+                  value={selectedWarehouseName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedWarehouseName(val);
+                    if (val) {
+                      setCurrentLocation(val);
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition font-medium"
+                >
+                  <option value="">-- Select Registered Warehouse (Pre-fills Location) --</option>
+                  {warehouses.map(wh => (
+                    <option key={wh.id} value={wh.name} className="text-slate-800 font-medium">
+                      {wh.name} ({wh.location})
+                    </option>
+                  ))}
                 </select>
               </div>
 

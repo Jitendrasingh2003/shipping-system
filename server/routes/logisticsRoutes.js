@@ -17,7 +17,7 @@ const { protect, authorize } = require('../middleware/auth');
 router.use(protect);
 
 // Warehouses
-router.get('/warehouses', authorize('admin', 'staff'), getWarehouses);
+router.get('/warehouses', authorize('admin', 'staff', 'customer'), getWarehouses);
 router.post('/warehouses', authorize('admin'), createWarehouse);
 router.delete('/warehouses/:id', authorize('admin'), deleteWarehouse);
 

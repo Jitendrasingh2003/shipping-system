@@ -205,7 +205,9 @@ const runDatabaseSeeder = async () => {
 
     // ── 4. Seed Fleet ─────────────────────────────────────────
     const [[{ count: fleetCount }]] = await pool.query('SELECT COUNT(*) AS count FROM fleet');
-    if (fleetCount === 0) {
+    if (fleetCount < 10) {
+      console.log('🧹 Clearing fleet table to re-seed all demo assets...');
+      await pool.query('DELETE FROM fleet');
       console.log('🌱 Seeding demo fleet...');
       const fleet = [
         // ── Trucks / General ──

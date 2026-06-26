@@ -52,6 +52,7 @@ const rowToShipment = (row) => ({
   customsDescription: row.customs_description,
   fleetVehicleId: row.fleet_vehicle_id,
   fleetVehicleName: row.fleet_vehicle_name,
+  warehouseName: row.warehouse_name,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
@@ -79,7 +80,8 @@ const bookShipment = async (req, res, next) => {
     declaredValue,
     recipientPhone,
     customsDescription,
-    fleetVehicleId
+    fleetVehicleId,
+    warehouseName
   } = req.body;
 
   try {
@@ -101,7 +103,7 @@ const bookShipment = async (req, res, next) => {
 
     const history = JSON.stringify([{
       status: 'Pending Payment',
-      location: originCity,
+      location: warehouseName || originCity,
       timestamp: new Date(),
       updatedBy: senderName,
       fleetVehicle: fleetVehicleName
@@ -113,8 +115,8 @@ const bookShipment = async (req, res, next) => {
          origin_country, origin_city, destination_country, destination_city,
          weight, dim_length, dim_width, dim_height, shipment_type, status, estimated_delivery_days, payment_status, history,
          item_description, is_metal, govt_id_proof, pickup_date, consignment_category, declared_value, recipient_phone, customs_description,
-         fleet_vehicle_id, fleet_vehicle_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         fleet_vehicle_id, fleet_vehicle_name, warehouse_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, trackingId, senderId, senderName, senderPhone || '', recipientName, recipientAddress, 
         originCountry || 'India', originCity, destinationCountry || 'India', destinationCity,
@@ -126,7 +128,8 @@ const bookShipment = async (req, res, next) => {
         recipientPhone || '',
         customsDescription || null,
         fleetVehicleId || null,
-        fleetVehicleName
+        fleetVehicleName,
+        warehouseName || null
       ]
     );
 
@@ -236,7 +239,7 @@ const assignShipment = async (req, res, next) => {
 // Update Shipment Status (Staff or Admin)
 const updateShipmentStatus = async (req, res, next) => {
   const { shipmentId } = req.params;
-  const { status, location, signature, otp } = req.body;
+  const { status, location, signature, otp, warehouseName } = req.body;
 
   try {
     const pool = getMySQLPool();
@@ -273,18 +276,18 @@ const updateShipmentStatus = async (req, res, next) => {
     if (status === 'Out for Delivery') {
       generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       await pool.query(
-        'UPDATE shipments SET status = ?, history = ?, delivery_otp = ? WHERE id = ?',
-        [status, JSON.stringify(history), generatedOtp, shipmentId]
+        'UPDATE shipments SET status = ?, history = ?, delivery_otp = ?, warehouse_name = ? WHERE id = ?',
+        [status, JSON.stringify(history), generatedOtp, warehouseName || null, shipmentId]
       );
     } else if (signature) {
       await pool.query(
-        'UPDATE shipments SET status = ?, history = ?, signature = ? WHERE id = ?',
-        [status, JSON.stringify(history), signature, shipmentId]
+        'UPDATE shipments SET status = ?, history = ?, signature = ?, warehouse_name = ? WHERE id = ?',
+        [status, JSON.stringify(history), signature, warehouseName || null, shipmentId]
       );
     } else {
       await pool.query(
-        'UPDATE shipments SET status = ?, history = ? WHERE id = ?',
-        [status, JSON.stringify(history), shipmentId]
+        'UPDATE shipments SET status = ?, history = ?, warehouse_name = ? WHERE id = ?',
+        [status, JSON.stringify(history), warehouseName || null, shipmentId]
       );
     }
 

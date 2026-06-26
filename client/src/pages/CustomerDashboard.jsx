@@ -405,16 +405,25 @@ const CustomerDashboard = () => {
   const [fleetVehicleId, setFleetVehicleId] = useState('');
   const [fleetLoading, setFleetLoading] = useState(false);
 
-  // Fetch fleet vehicles when shipment type changes to Air or Ocean
+  // Warehouses State
+  const [warehouses, setWarehouses] = useState([]);
+  const [selectedWarehouseName, setSelectedWarehouseName] = useState('');
+
+  // Fetch fleet vehicles when shipment type changes to Air, Ocean, or Express
   useEffect(() => {
-    if (shipmentType === 'Air' || shipmentType === 'Ocean') {
-      const typeMap = { Air: 'Cargo Plane', Ocean: 'Container Vessel' };
-      const vehicleType = typeMap[shipmentType];
+    if (shipmentType === 'Air' || shipmentType === 'Ocean' || shipmentType === 'Express') {
       setFleetLoading(true);
       axios.get('/logistics/fleet/available')
         .then(res => {
           if (res.data.success) {
-            const filtered = res.data.fleet.filter(v => v.vehicleType === vehicleType && v.status === 'Idle');
+            let filtered = [];
+            if (shipmentType === 'Air') {
+              filtered = res.data.fleet.filter(v => v.vehicleType === 'Cargo Plane' && v.status === 'Idle');
+            } else if (shipmentType === 'Ocean') {
+              filtered = res.data.fleet.filter(v => (v.vehicleType === 'Container Vessel' || v.vehicleType === 'Container Ship') && v.status === 'Idle');
+            } else if (shipmentType === 'Express') {
+              filtered = res.data.fleet.filter(v => (v.vehicleType === 'Express Van' || v.vehicleType === 'Express Bike' || v.vehicleType === 'Express Vehicle') && v.status === 'Idle');
+            }
             setAvailableFleet(filtered);
             if (filtered.length > 0) setFleetVehicleId(filtered[0].id);
             else setFleetVehicleId('');
@@ -621,6 +630,12 @@ const CustomerDashboard = () => {
       const ratesRes = await axios.get('/logistics/rates');
       if (ratesRes.data.success && Object.keys(ratesRes.data.rates).length > 0) {
         setRates(ratesRes.data.rates);
+      }
+
+      // Fetch registered warehouses
+      const warehousesRes = await axios.get('/logistics/warehouses');
+      if (warehousesRes.data.success) {
+        setWarehouses(warehousesRes.data.warehouses);
       }
     } catch (err) {
       toast.error('Failed to load portal data.');
@@ -1047,6 +1062,26 @@ const CustomerDashboard = () => {
     });
   };
 
+  const handleCalendarDateClick = (day) => {
+    const clickedDate = new Date(calendarYear, calendarMonth, day, 23, 59, 59);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    clickedDate.setHours(0, 0, 0, 0);
+
+    if (clickedDate < today) {
+      return toast.error('Cannot select a past date for pickup scheduling.');
+    }
+
+    const year = calendarYear;
+    const month = String(calendarMonth + 1).padStart(2, '0');
+    const dateStr = String(day).padStart(2, '0');
+    const formattedDateTime = `${year}-${month}-${dateStr}T09:00`;
+
+    setPickupDate(formattedDateTime);
+    setActiveTab('book');
+    toast.success(`Selected Pickup Date: ${dateStr}/${month}/${year}. Fill out the form to register your shipment.`);
+  };
+
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -1298,7 +1333,8 @@ const CustomerDashboard = () => {
         declaredValue,
         recipientPhone,
         customsDescription,
-        fleetVehicleId: fleetVehicleId || undefined
+        fleetVehicleId: fleetVehicleId || undefined,
+        warehouseName: selectedWarehouseName || undefined
       });
 
       if (res.data.success) {
@@ -1314,6 +1350,7 @@ const CustomerDashboard = () => {
         setDeclaredValue('1000');
         setRecipientPhone('');
         setCustomsDescription('');
+        setSelectedWarehouseName('');
         
         setPayingShipment(res.data.shipment);
         setActiveTab('orders');
@@ -1709,10 +1746,10 @@ const CustomerDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row relative">
+    <div className="min-h-screen md:h-screen md:overflow-hidden bg-slate-50 flex flex-col md:flex-row relative">
       
       {/* Sidebar Nav */}
-      <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
+      <aside className="w-full md:w-64 md:h-screen md:sticky md:top-0 overflow-y-auto bg-white border-r border-slate-200 flex flex-col justify-between p-5 z-20">
         <div className="space-y-6">
           
           {/* Logo */}
@@ -1917,9 +1954,19 @@ const CustomerDashboard = () => {
                               <td className="py-3.5">{shipment.originCity} → {shipment.destinationCity}</td>
                               <td className="py-3.5 font-semibold text-indigo-600">{shipment.estimatedDeliveryDays ? `${shipment.estimatedDeliveryDays} days` : 'N/A'}</td>
                               <td className="py-3.5">
-                                <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700">
-                                  {shipment.shipmentType}
-                                </span>
+                                <div className="space-y-1">
+                                  <span className="px-2 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700 block w-max">
+                                    {shipment.shipmentType}
+                                  </span>
+                                  {shipment.warehouseName && (
+                                    <div className="text-[10px] font-medium text-slate-600 flex items-center gap-1">
+                                      <span>🏢</span>
+                                      <span className="truncate max-w-[120px]" title={shipment.warehouseName}>
+                                        {shipment.warehouseName}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3.5">
                                 {shipment.fleetVehicleName ? (
@@ -2806,17 +2853,19 @@ const CustomerDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Fleet Vehicle Selection for Air & Ocean */}
-                    {(shipmentType === 'Air' || shipmentType === 'Ocean') && (
+                    {/* Fleet Vehicle Selection for Air, Ocean & Express */}
+                    {(shipmentType === 'Air' || shipmentType === 'Ocean' || shipmentType === 'Express') && (
                       <div className="border border-indigo-200 bg-indigo-50/30 p-4 rounded-xl space-y-2">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1 flex items-center gap-1.5">
-                          {shipmentType === 'Air' ? <span>✈️</span> : <span>🚢</span>}
-                          Select {shipmentType === 'Air' ? 'Aircraft / Cargo Plane' : 'Container Vessel / Ship'}
+                          {shipmentType === 'Air' ? <span>✈️</span> : shipmentType === 'Ocean' ? <span>🚢</span> : <span>⚡</span>}
+                          Select {shipmentType === 'Air' ? 'Aircraft / Cargo Plane' : shipmentType === 'Ocean' ? 'Container Vessel / Ship' : 'Express Delivery Vehicle'}
                         </label>
                         {fleetLoading ? (
                           <div className="text-xs text-slate-400 italic">Loading available fleet...</div>
                         ) : availableFleet.length === 0 ? (
-                          <div className="text-xs text-amber-600 font-medium">No {shipmentType === 'Air' ? 'aircraft' : 'vessels'} available at the moment.</div>
+                          <div className="text-xs text-amber-600 font-medium">
+                            No {shipmentType === 'Air' ? 'aircraft' : shipmentType === 'Ocean' ? 'vessels' : 'express vehicles'} available at the moment.
+                          </div>
                         ) : (
                           <select value={fleetVehicleId} onChange={(e) => setFleetVehicleId(e.target.value)} className="w-full bg-white border border-indigo-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300">
                             {availableFleet.map(v => (
@@ -2829,7 +2878,9 @@ const CustomerDashboard = () => {
                         <p className="text-[9px] text-indigo-400 font-medium">
                           {shipmentType === 'Air' 
                             ? 'Select a cargo aircraft for your air shipment.' 
-                            : 'Select a container vessel for your ocean freight.'}
+                            : shipmentType === 'Ocean'
+                            ? 'Select a container vessel for your ocean freight.'
+                            : 'Select an express vehicle for your express delivery.'}
                         </p>
                       </div>
                     )}
@@ -2923,6 +2974,27 @@ const CustomerDashboard = () => {
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
                           required 
                         />
+                      </div>
+                    </div>
+
+                    {/* Warehouse Depot Selection */}
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center space-x-1">
+                        <span className="text-indigo-500">🏢</span>
+                        <span>Warehouse Depot (Optional)</span>
+                      </label>
+                      <div>
+                        <label className="block text-[9px] font-semibold text-slate-400 mb-1">Select Registered Warehouse</label>
+                        <select 
+                          value={selectedWarehouseName} 
+                          onChange={(e) => setSelectedWarehouseName(e.target.value)} 
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-medium"
+                        >
+                          <option value="">-- No Warehouse Selected --</option>
+                          {warehouses.map(wh => (
+                            <option key={wh.id} value={wh.name} className="text-slate-800 font-medium">{wh.name} ({wh.location})</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -3175,13 +3247,13 @@ const CustomerDashboard = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From Country</label>
-                        <select value={calcOriginCountry} onChange={(e) => setCalcOriginCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <select value={calcOriginCountry} onChange={(e) => setCalcOriginCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                           {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To Country</label>
-                        <select value={calcDestCountry} onChange={(e) => setCalcDestCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <select value={calcDestCountry} onChange={(e) => setCalcDestCountry(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                           {Object.keys(COUNTRIES_AND_CITIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -3189,13 +3261,13 @@ const CustomerDashboard = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">From City</label>
-                        <select value={calcOrigin} onChange={(e) => setCalcOrigin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <select value={calcOrigin} onChange={(e) => setCalcOrigin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                           {(COUNTRIES_AND_CITIES[calcOriginCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">To City</label>
-                        <select value={calcDest} onChange={(e) => setCalcDest(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <select value={calcDest} onChange={(e) => setCalcDest(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                           {(COUNTRIES_AND_CITIES[calcDestCountry] || []).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -3204,11 +3276,11 @@ const CustomerDashboard = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Weight (kg)</label>
-                        <input type="number" step="0.1" value={calcWeight} onChange={(e) => setCalcWeight(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                        <input type="number" step="0.1" value={calcWeight} onChange={(e) => setCalcWeight(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Service</label>
-                        <select value={calcType} onChange={(e) => setCalcType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                        <select value={calcType} onChange={(e) => setCalcType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                           {(calcOriginCountry === calcDestCountry ? DOMESTIC_TYPES : INTERNATIONAL_TYPES).map(t => <option key={t} value={getTypeMapping(t)}>{t}</option>)}
                         </select>
                       </div>
@@ -3258,7 +3330,7 @@ const CustomerDashboard = () => {
                   <form onSubmit={handleSubmitTicket} className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Category</label>
-                      <select value={ticketCat} onChange={(e) => setTicketCat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs">
+                      <select value={ticketCat} onChange={(e) => setTicketCat(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800">
                         <option value="General">General Inquiries</option>
                         <option value="Delay">Delivery Delay</option>
                         <option value="Billing">Billing & Cost Errors</option>
@@ -3268,12 +3340,12 @@ const CustomerDashboard = () => {
 
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Issue Title</label>
-                      <input type="text" value={ticketTitle} onChange={(e) => setTicketTitle(e.target.value)} placeholder="Brief title of issue" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                      <input type="text" value={ticketTitle} onChange={(e) => setTicketTitle(e.target.value)} placeholder="Brief title of issue" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required />
                     </div>
 
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Description Message</label>
-                      <textarea value={ticketMessage} onChange={(e) => setTicketMessage(e.target.value)} placeholder="Describe the issue in detail..." rows="4" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required></textarea>
+                      <textarea value={ticketMessage} onChange={(e) => setTicketMessage(e.target.value)} placeholder="Describe the issue in detail..." rows="4" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required></textarea>
                     </div>
 
                     <button type="submit" disabled={submittingTicket} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition">
@@ -3368,26 +3440,26 @@ const CustomerDashboard = () => {
                   <form onSubmit={handleCreateAddress} className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Recipient Name</label>
-                      <input type="text" value={addrName} onChange={(e) => setAddrName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                      <input type="text" value={addrName} onChange={(e) => setAddrName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Contact Phone</label>
-                      <input type="tel" value={addrPhone} onChange={(e) => setAddrPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required />
+                      <input type="tel" value={addrPhone} onChange={(e) => setAddrPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Complete Address</label>
-                      <textarea value={addrText} onChange={(e) => setAddrText(e.target.value)} rows="3" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs" required></textarea>
+                      <textarea value={addrText} onChange={(e) => setAddrText(e.target.value)} rows="3" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800" required></textarea>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">City</label>
-                        <select value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs">
+                        <select value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs text-slate-800">
                           {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pincode</label>
-                        <input type="text" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs" required />
+                        <input type="text" value={addrPin} onChange={(e) => setAddrPin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-2 text-xs text-slate-800" required />
                       </div>
                     </div>
 
@@ -3490,7 +3562,7 @@ const CustomerDashboard = () => {
 
             {/* TAB 8: SUPPORT CHAT */}
             {activeTab === 'chat' && (
-              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-[550px] overflow-hidden animate-fade-in">
+              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col h-[550px] md:h-[calc(100vh-120px)] overflow-hidden animate-fade-in">
                 {/* Chat Header */}
                 <div className="bg-slate-50 p-4 border-b border-slate-200 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -3748,11 +3820,25 @@ const CustomerDashboard = () => {
                       const day = i + 1;
                       const dayShipments = getShipmentsForDay(day);
                       const isToday = day === new Date().getDate() && calendarMonth === new Date().getMonth() && calendarYear === new Date().getFullYear();
+                      
+                      const cellDate = new Date(calendarYear, calendarMonth, day, 23, 59, 59);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      cellDate.setHours(0, 0, 0, 0);
+                      const isPast = cellDate < today;
+
                       return (
-                        <div key={day} className={`h-20 p-1 rounded-xl border transition relative ${
-                          isToday ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
-                        }`}>
-                          <span className={`text-[10px] font-bold ${isToday ? 'text-indigo-600' : 'text-slate-500'}`}>{day}</span>
+                        <div 
+                          key={day} 
+                          onClick={() => handleCalendarDateClick(day)}
+                          className={`h-20 p-1 rounded-xl border transition relative cursor-pointer hover:border-indigo-300 hover:shadow-sm ${
+                            isToday ? 'bg-indigo-50 border-indigo-300' : 
+                            isPast ? 'bg-slate-100/50 border-slate-100 opacity-60 cursor-not-allowed' :
+                            'bg-slate-50/50 border-slate-100 hover:bg-slate-50'
+                          }`}
+                          title={isPast ? 'Past date - cannot schedule pickup' : 'Click to book a pickup on this date'}
+                        >
+                          <span className={`text-[10px] font-bold ${isToday ? 'text-indigo-600' : isPast ? 'text-slate-400' : 'text-slate-500'}`}>{day}</span>
                           <div className="mt-1 space-y-0.5">
                             {dayShipments.slice(0, 2).map(s => (
                               <div key={s.id} className={`text-[7px] font-bold px-1 py-0.5 rounded truncate ${

@@ -435,6 +435,16 @@ const initTables = async () => {
       }
     }
 
+    // Ensure warehouse_name column exists in shipments table
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN warehouse_name VARCHAR(255) DEFAULT NULL');
+      console.log('📝 MySQL: Added warehouse_name column to shipments table.');
+    } catch (err) {
+      if (err.errno !== 1060) {
+        console.error('❌ Failed to alter shipments table for warehouse_name:', err.message);
+      }
+    }
+
     // REFERRALS
     try {
       await connection.query(`
