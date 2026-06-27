@@ -23,8 +23,7 @@ SmartShip is designed using a decoupled Client-Server architecture:
 *   **Document Generation**: PDFKit (dynamic creation of commercial invoice PDFs)
 
 ### 🗄️ Database Management
-*   **Relational Engine (MySQL)**: Standard database connection using `mysql2/promise` connection pool. Handles relational records (Users, Shipments, Fleet Registry, Warehouses, Chat history) with auto-creation of tables and fields on startup.
-*   **Document Engine (MongoDB)**: Used as supplementary storage for notifications, user addresses, and support tickets, ensuring structural flexibility.
+*   **Database Engine (MySQL)**: Standard database connection using `mysql2/promise` connection pool. Handles all relational records, including Users, Shipments, Fleet Registry, Warehouses, Chat history, Notifications, Addresses, and Support tickets, with auto-creation of tables and fields on startup.
 *   **Auto-Seeding**: A seeder script (`seeder.js`) runs automatically when the database is empty, loading default admin, staff, customer profiles, warehouses, and fleet vehicles.
 
 ---

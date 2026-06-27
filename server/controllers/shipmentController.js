@@ -109,14 +109,14 @@ const bookShipment = async (req, res, next) => {
       fleetVehicle: fleetVehicleName
     }]);
 
-    await pool.query(
+     await pool.query(
       `INSERT INTO shipments 
         (id, tracking_id, sender_id, sender_name, sender_phone, recipient_name, recipient_address, 
          origin_country, origin_city, destination_country, destination_city,
          weight, dim_length, dim_width, dim_height, shipment_type, status, estimated_delivery_days, payment_status, history,
          item_description, is_metal, govt_id_proof, pickup_date, consignment_category, declared_value, recipient_phone, customs_description,
          fleet_vehicle_id, fleet_vehicle_name, warehouse_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending Payment', ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, trackingId, senderId, senderName, senderPhone || '', recipientName, recipientAddress, 
         originCountry || 'India', originCity, destinationCountry || 'India', destinationCity,
