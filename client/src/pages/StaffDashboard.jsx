@@ -21,6 +21,7 @@ const StaffDashboard = () => {
   const mapRef = useRef(null);
   
   const [lang, setLang] = useState('en');
+  const [newAssignmentCount, setNewAssignmentCount] = useState(0); // 🔔 unread badge
   const t = (key) => {
     const dict = {
       en: {
@@ -222,6 +223,57 @@ const StaffDashboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // 🔔 Join staff's private socket room on mount
+  useEffect(() => {
+    if (!socket || !user) return;
+    socket.emit('join:user', user.id);
+  }, [socket, user]);
+
+  // 🔔 Listen for new shipment assignment notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewAssignment = (data) => {
+      // Show prominent toast notification
+      toast(
+        (t) => (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <span style={{ fontSize: '22px' }}>📦</span>
+            <div>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#1e293b' }}>Naya Parcel Assign Hua!</div>
+              <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>{data.trackingId}</div>
+              <div style={{ fontSize: '11px', color: '#6366f1', marginTop: '1px' }}>{data.origin} → {data.destination} ({data.type})</div>
+            </div>
+          </div>
+        ),
+        {
+          duration: 8000,
+          style: {
+            background: '#fff',
+            border: '2px solid #6366f1',
+            borderRadius: '14px',
+            padding: '14px 16px',
+            boxShadow: '0 8px 30px rgba(99,102,241,0.18)'
+          }
+        }
+      );
+      setNewAssignmentCount(prev => prev + 1); // increment badge
+      fetchData(); // auto-refresh shipments list
+    };
+
+    const handleGeneralNotification = (data) => {
+      toast.success(data.message || data.title || 'New notification received.');
+    };
+
+    socket.on('new:assignment', handleNewAssignment);
+    socket.on('notification', handleGeneralNotification);
+
+    return () => {
+      socket.off('new:assignment', handleNewAssignment);
+      socket.off('notification', handleGeneralNotification);
+    };
+  }, [socket]);
 
   // Socket Tracking listener for Staff
   useEffect(() => {
@@ -565,7 +617,7 @@ const StaffDashboard = () => {
           <nav className="space-y-1">
             {[
               { id: 'dashboard', label: t('myDashboard'), icon: Activity },
-              { id: 'tasks', label: 'Daily Task List', icon: ClipboardList, count: activeDeliveries.length },
+              { id: 'tasks', label: 'Daily Task List', icon: ClipboardList, count: activeDeliveries.length, newCount: newAssignmentCount },
               { id: 'active', label: t('activeDeliveriesTab'), icon: Truck },
               { id: 'transit', label: t('liveTransitTracker'), icon: Map },
               { id: 'warehouses', label: t('warehouseInventory'), icon: Layers },
@@ -581,6 +633,7 @@ const StaffDashboard = () => {
                   onClick={() => {
                     setActiveTab(tab.id);
                     setSearchQuery('');
+                    if (tab.id === 'tasks') setNewAssignmentCount(0);
                   }}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition duration-150 ${
                     isActive 
@@ -588,17 +641,30 @@ const StaffDashboard = () => {
                       : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent'
                   }`}
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3 relative">
                     <Icon size={18} className={isActive ? 'text-indigo-600' : 'text-slate-400'} />
+                    {/* 🔴 New assignment pulse dot on icon */}
+                    {tab.newCount > 0 && (
+                      <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
+                    )}
                     <span>{tab.label}</span>
                   </div>
-                  {tab.count !== undefined && tab.count > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                      isActive ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {tab.count}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {/* Red new badge */}
+                    {tab.newCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-red-500 text-white animate-bounce">
+                        +{tab.newCount} NEW
+                      </span>
+                    )}
+                    {/* Normal count badge */}
+                    {tab.count !== undefined && tab.count > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        isActive ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}

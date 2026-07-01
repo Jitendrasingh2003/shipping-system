@@ -7,7 +7,7 @@ import axios from 'axios';
 
 const PortalSelectPage = () => {
   const navigate = useNavigate();
-  const { login, register, token, user } = useAuth();
+  const { login, register, logout, token, user } = useAuth();
   
   const [lang, setLang] = useState('en');
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
@@ -157,8 +157,22 @@ const PortalSelectPage = () => {
       const res = await login(email, password);
       setSubmitting(false);
       if (res?.success) {
+        const loggedInRole = res.user.role;
+        const expectedRole = selectedRole; // 'customer' or 'staff'
+
+        // Role mismatch check: Admin/Staff cannot login via Customer portal, and vice versa
+        if (loggedInRole !== expectedRole) {
+          logout(); // Immediately clear the wrongly-logged-in session
+          if (expectedRole === 'customer') {
+            toast.error(`❌ Access Denied! Admin/Staff accounts cannot login here. Please use the Admin Panel.`);
+          } else {
+            toast.error(`❌ Access Denied! Customer accounts cannot login via Staff Hub.`);
+          }
+          return;
+        }
+
         toast.success(`Welcome back, ${res.user.name}!`);
-        navigate(`/${res.user.role}`);
+        navigate(`/${loggedInRole}`);
       } else {
         toast.error(res?.message || 'Login failed.');
       }

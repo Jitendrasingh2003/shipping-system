@@ -225,6 +225,18 @@ const assignShipment = async (req, res, next) => {
        `Shipment ${shipment.trackingId} has been assigned to you for delivery.`, 'general', shipmentId]
     );
 
+    // 🔔 Real-time Socket.io alert to staff
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${staffId}`).emit('new:assignment', {
+        trackingId: shipment.trackingId,
+        origin: shipment.originCity,
+        destination: shipment.destinationCity,
+        type: shipment.shipmentType,
+        message: `New parcel assigned: ${shipment.trackingId} (${shipment.originCity} → ${shipment.destinationCity})`
+      });
+    }
+
     const [updated] = await pool.query('SELECT * FROM shipments WHERE id = ?', [shipmentId]);
     res.status(200).json({
       success: true,
@@ -681,6 +693,18 @@ const bulkAssignShipments = async (req, res, next) => {
         [uuidv4(), staffId, 'New Shipment Assigned (Bulk)',
          `Shipment ${shipment.trackingId} has been assigned to you.`, 'general', shipmentId]
       );
+
+      // 🔔 Real-time Socket.io alert to staff (bulk)
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user:${staffId}`).emit('new:assignment', {
+          trackingId: shipment.trackingId,
+          origin: shipment.originCity,
+          destination: shipment.destinationCity,
+          type: shipment.shipmentType,
+          message: `New parcel assigned: ${shipment.trackingId} (${shipment.originCity} → ${shipment.destinationCity})`
+        });
+      }
       assignedCount++;
     }
 

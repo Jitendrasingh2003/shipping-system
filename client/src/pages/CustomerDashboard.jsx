@@ -139,12 +139,11 @@ const CustomerDashboard = () => {
   const socket = useSocket();
 
   const [lang, setLang] = useState('en');
-  const LANGUAGES = ['en', 'hi', 'es', 'fr', 'de', 'ar', 'zh'];
-  const LANG_LABELS = { en: 'EN', hi: 'हि', es: 'ES', fr: 'FR', de: 'DE', ar: 'ع', zh: '中' };
-  const LANG_FULL = { en: 'English', hi: 'हिन्दी', es: 'Español', fr: 'Français', de: 'Deutsch', ar: 'العربية', zh: '中文' };
+  const LANGUAGES = ['en', 'hi'];
+  const LANG_LABELS = { en: 'EN', hi: 'हि' };
+  const LANG_FULL = { en: 'English', hi: 'हिन्दी' };
   const cycleLang = () => {
-    const idx = LANGUAGES.indexOf(lang);
-    setLang(LANGUAGES[(idx + 1) % LANGUAGES.length]);
+    setLang(prev => prev === 'en' ? 'hi' : 'en');
   };
   const t = (key) => {
     const dict = {
@@ -200,136 +199,11 @@ const CustomerDashboard = () => {
         schedule: 'शेड्यूल कैलेंडर',
         returns: 'रिटर्न और रिवर्स पिकअप'
       },
-      es: {
-        totalBookings: 'Pedidos Reservados',
-        transitTracker: 'En Tránsito',
-        spendLeaderboard: 'Análisis de Gastos',
-        recentHistory: 'Historial Reciente',
-        activeAlerts: 'Alertas Activas',
-        welcomeBack: 'Bienvenido de nuevo',
-        bookShipment: 'Reservar Envío',
-        billingStatements: 'Estado de Cuenta',
-        transitMap: 'Mapa de Tránsito',
-        supportTickets: 'Tickets de Soporte',
-        warehouseRates: 'Calculadora de Tarifas',
-        myConsignments: 'Mis Envíos',
-        spendLogistics: 'Gastos y Gráficos',
-        bookNewShipment: 'Nuevo Envío',
-        rateCalculator: 'Calculadora de Tarifas',
-        shippingTariff: 'Tarifas de Envío',
-        supportDeskChat: 'Chat de Soporte',
-        billingInvoices: 'Facturas',
-        savedAddresses: 'Direcciones Guardadas',
-        notificationFeed: 'Notificaciones',
-        profileSettings: 'Configuración',
-        referrals: 'Referir y Ganar',
-        schedule: 'Calendario',
-        returns: 'Devoluciones'
-      },
-      fr: {
-        totalBookings: 'Commandes Réservées',
-        transitTracker: 'En Transit',
-        spendLeaderboard: 'Analyse des Dépenses',
-        recentHistory: 'Historique Récent',
-        activeAlerts: 'Alertes Actives',
-        welcomeBack: 'Bon retour',
-        bookShipment: 'Réserver un Envoi',
-        billingStatements: 'Relevés de Facturation',
-        transitMap: 'Carte de Transit',
-        supportTickets: 'Tickets de Support',
-        warehouseRates: 'Calculatrice de Tarifs',
-        myConsignments: 'Mes Envois',
-        spendLogistics: 'Dépenses et Graphiques',
-        bookNewShipment: 'Nouvel Envoi',
-        rateCalculator: 'Calculatrice de Tarifs',
-        shippingTariff: 'Tarifs d\'Expédition',
-        supportDeskChat: 'Chat de Support',
-        billingInvoices: 'Factures',
-        savedAddresses: 'Adresses Enregistrées',
-        notificationFeed: 'Notifications',
-        profileSettings: 'Paramètres',
-        referrals: 'Parrainer et Gagner',
-        schedule: 'Calendrier',
-        returns: 'Retours'
-      },
-      de: {
-        totalBookings: 'Gebuchte Bestellungen',
-        transitTracker: 'In Transit',
-        spendLeaderboard: 'Ausgabenanalyse',
-        recentHistory: 'Letzter Verlauf',
-        activeAlerts: 'Aktive Benachrichtigungen',
-        welcomeBack: 'Willkommen zurück',
-        bookShipment: 'Sendung Buchen',
-        billingStatements: 'Abrechnungen',
-        transitMap: 'Transitkarte',
-        supportTickets: 'Support-Tickets',
-        warehouseRates: 'Tarifrechner',
-        myConsignments: 'Meine Sendungen',
-        spendLogistics: 'Ausgaben und Diagramme',
-        bookNewShipment: 'Neue Sendung',
-        rateCalculator: 'Tarifrechner',
-        shippingTariff: 'Versandtarife',
-        supportDeskChat: 'Support-Chat',
-        billingInvoices: 'Rechnungen',
-        savedAddresses: 'Gespeicherte Adressen',
-        notificationFeed: 'Benachrichtigungen',
-        profileSettings: 'Einstellungen',
-        referrals: 'Empfehlen und Verdienen',
-        schedule: 'Kalender',
-        returns: 'Rücksendungen'
-      },
-      ar: {
-        totalBookings: 'الطلبات المحجوزة',
-        transitTracker: 'قيد النقل',
-        spendLeaderboard: 'تحليل المصروفات',
-        recentHistory: 'السجل الأخير',
-        activeAlerts: 'التنبيهات النشطة',
-        welcomeBack: 'مرحبًا بعودتك',
-        bookShipment: 'حجز شحنة',
-        billingStatements: 'كشوف الفواتير',
-        transitMap: 'خريطة العبور',
-        supportTickets: 'تذاكر الدعم',
-        warehouseRates: 'حاسبة التعرفة',
-        myConsignments: 'شحناتي',
-        spendLogistics: 'المصروفات والرسوم البيانية',
-        bookNewShipment: 'شحنة جديدة',
-        rateCalculator: 'حاسبة الأسعار',
-        shippingTariff: 'تعريفات الشحن',
-        supportDeskChat: 'دردشة الدعم',
-        billingInvoices: 'الفواتير',
-        savedAddresses: 'العناوين المحفوظة',
-        notificationFeed: 'الإشعارات',
-        profileSettings: 'الإعدادات',
-        referrals: 'الإحالة والربح',
-        schedule: 'التقويم',
-        returns: 'المرتجعات'
-      },
-      zh: {
-        totalBookings: '已预订订单',
-        transitTracker: '运输中',
-        spendLeaderboard: '支出分析',
-        recentHistory: '近期历史',
-        activeAlerts: '活跃提醒',
-        welcomeBack: '欢迎回来',
-        bookShipment: '预订发货',
-        billingStatements: '账单报表',
-        transitMap: '运输地图',
-        supportTickets: '支持工单',
-        warehouseRates: '运费计算器',
-        myConsignments: '我的货物',
-        spendLogistics: '支出与图表',
-        bookNewShipment: '新发货',
-        rateCalculator: '费率计算器',
-        shippingTariff: '运费费率',
-        supportDeskChat: '支持聊天',
-        billingInvoices: '发票',
-        savedAddresses: '已保存地址',
-        notificationFeed: '通知',
-        profileSettings: '设置',
-        referrals: '推荐与赚取',
-        schedule: '日程日历',
-        returns: '退货与逆向取件'
-      }
+      es: {},
+      fr: {},
+      de: {},
+      ar: {},
+      zh: {}
     };
     return dict[lang][key] || key;
   };
