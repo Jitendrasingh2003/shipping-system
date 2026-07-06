@@ -26,18 +26,19 @@ const {
   updateReturnStatus
 } = require('../controllers/shipmentController');
 const { protect, authorize } = require('../middleware/auth');
+const { enforceShipmentLimit } = require('../middleware/planLimits');
 
 // Public route to track package without logging in
 router.get('/track/:trackingId', getShipmentByTrackingId);
 
 // Customer only routes
-router.post('/book', protect, authorize('customer'), bookShipment);
+router.post('/book', protect, authorize('customer'), enforceShipmentLimit, bookShipment);
 router.post('/calculate-eta', protect, authorize('customer'), estimateEta);
 router.post('/recommend-route', protect, authorize('customer'), recommendRoute);
 router.get('/customer', protect, authorize('customer'), getCustomerShipments);
 router.put('/:shipmentId/cancel', protect, authorize('customer', 'admin'), cancelShipment);
 router.post('/:shipmentId/rate', protect, authorize('customer'), rateShipment);
-router.post('/:shipmentId/reorder', protect, authorize('customer'), reOrderShipment);
+router.post('/:shipmentId/reorder', protect, authorize('customer'), enforceShipmentLimit, reOrderShipment);
 
 // Staff only routes
 router.get('/staff', protect, authorize('staff'), getStaffShipments);

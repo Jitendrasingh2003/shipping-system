@@ -18,9 +18,10 @@ const {
 } = require('../controllers/authController');
 const { protect, authorize } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
+const { enforceUserLimit } = require('../middleware/planLimits');
 
 // Public auth routes
-router.post('/register', authLimiter, register);
+router.post('/register', authLimiter, enforceUserLimit, register);
 router.post('/login', authLimiter, login);
 router.post('/send-otp', authLimiter, sendOtp);
 
