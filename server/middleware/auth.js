@@ -15,7 +15,7 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'smartship_jwt_super_secret_signing_key_2026');
     const pool = getMySQLPool();
     const [rows] = await pool.query(
-      'SELECT id, name, email, role, phone, is_blocked FROM users WHERE id = ?',
+      'SELECT id, name, email, role, phone, is_blocked, tenant_id FROM users WHERE id = ?',
       [decoded.id]
     );
 
@@ -28,6 +28,18 @@ const protect = async (req, res, next) => {
     }
 
     req.user = rows[0];
+
+    // Tenant context — agar req.tenant set nahi hai lekin user ka tenant_id hai
+    if (!req.tenant && rows[0].tenant_id) {
+      const [tenantRows] = await pool.query(
+        'SELECT id, name, slug, plan, plan_status, primary_color, logo_url, max_users, max_shipments_per_month FROM tenants WHERE id = ?',
+        [rows[0].tenant_id]
+      );
+      if (tenantRows.length > 0) {
+        req.tenant = tenantRows[0];
+      }
+    }
+
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token invalid or expired.' });

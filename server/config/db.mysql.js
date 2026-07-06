@@ -35,6 +35,31 @@ const initTables = async () => {
   try {
     const connection = await pool.getConnection();
 
+    // ── TENANTS TABLE (SaaS Core) ─────────────────────────────────
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id VARCHAR(36) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(100) NOT NULL UNIQUE,
+        owner_email VARCHAR(255) NOT NULL,
+        logo_url TEXT DEFAULT NULL,
+        primary_color VARCHAR(20) DEFAULT '#6366f1',
+        plan VARCHAR(50) DEFAULT 'trial',
+        plan_status VARCHAR(50) DEFAULT 'active',
+        is_active TINYINT(1) DEFAULT 1,
+        max_users INT DEFAULT 2,
+        max_shipments_per_month INT DEFAULT 50,
+        trial_ends_at TIMESTAMP DEFAULT NULL,
+        razorpay_key_id VARCHAR(255) DEFAULT NULL,
+        razorpay_key_secret VARCHAR(255) DEFAULT NULL,
+        smtp_host VARCHAR(255) DEFAULT NULL,
+        smtp_port INT DEFAULT NULL,
+        smtp_user VARCHAR(255) DEFAULT NULL,
+        smtp_pass VARCHAR(255) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // USERS
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -44,6 +69,7 @@ const initTables = async () => {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'customer',
         phone VARCHAR(50) DEFAULT '',
+        tenant_id VARCHAR(36) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -494,6 +520,77 @@ const initTables = async () => {
       console.log('📝 MySQL: Added reward_points column to users table.');
     } catch (err) {
       if (err.errno !== 1060) console.error('❌ Failed to add reward_points:', err.message);
+    }
+
+    // ── SaaS Multi-Tenancy Migrations ────────────────────────────
+    // Add tenant_id to users
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to users table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id users:', err.message); }
+
+    // Add tenant_id to shipments
+    try {
+      await connection.query('ALTER TABLE shipments ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to shipments table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id shipments:', err.message); }
+
+    // Add tenant_id to payments
+    try {
+      await connection.query('ALTER TABLE payments ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to payments table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id payments:', err.message); }
+
+    // Add tenant_id to fleet
+    try {
+      await connection.query('ALTER TABLE fleet ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to fleet table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id fleet:', err.message); }
+
+    // Add tenant_id to warehouses
+    try {
+      await connection.query('ALTER TABLE warehouses ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to warehouses table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id warehouses:', err.message); }
+
+    // Add tenant_id to notifications
+    try {
+      await connection.query('ALTER TABLE notifications ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to notifications table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id notifications:', err.message); }
+
+    // Add tenant_id to tickets
+    try {
+      await connection.query('ALTER TABLE tickets ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to tickets table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id tickets:', err.message); }
+
+    // Add tenant_id to rates
+    try {
+      await connection.query('ALTER TABLE rates ADD COLUMN tenant_id VARCHAR(36) DEFAULT NULL');
+      console.log('📝 MySQL: Added tenant_id to rates table.');
+    } catch (err) { if (err.errno !== 1060) console.error('❌ tenant_id rates:', err.message); }
+
+    // Create default tenant for existing data
+    try {
+      const defaultTenantId = 'default-tenant-000000000000000000';
+      await connection.query(`
+        INSERT IGNORE INTO tenants (id, name, slug, owner_email, plan, plan_status, is_active, max_users, max_shipments_per_month)
+        VALUES (?, 'SmartShip Demo', 'default', 'admin@shiptrack.com', 'enterprise', 'active', 1, 999999, 999999)
+      `, [defaultTenantId]);
+
+      // Migrate existing data to default tenant
+      await connection.query("UPDATE users SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE shipments SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE payments SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE fleet SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE warehouses SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE notifications SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE tickets SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      await connection.query("UPDATE rates SET tenant_id = ? WHERE tenant_id IS NULL", [defaultTenantId]);
+      console.log('✅ Existing data migrated to default tenant.');
+    } catch (err) {
+      if (err.errno !== 1062) console.error('❌ Default tenant migration:', err.message);
     }
 
     // SHIPMENT RETURNS

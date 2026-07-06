@@ -52,9 +52,9 @@ const sendOtp = async (req, res, next) => {
 };
 
 // Helper: Generate Token
-const generateToken = (id, role) => {
+const generateToken = (id, role, tenantId = null) => {
   return jwt.sign(
-    { id, role },
+    { id, role, tenantId },
     process.env.JWT_SECRET || 'smartship_jwt_super_secret_signing_key_2026',
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
   );
@@ -104,18 +104,21 @@ const register = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, salt);
     const userId = uuidv4();
 
+    // Tenant-aware registration
+    const tenantId = req.tenant ? req.tenant.id : null;
+
     await pool.query(
-      'INSERT INTO users (id, name, email, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, name, email.toLowerCase(), hashedPassword, userRole, phone]
+      'INSERT INTO users (id, name, email, password, role, phone, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [userId, name, email.toLowerCase(), hashedPassword, userRole, phone, tenantId]
     );
 
-    const token = generateToken(userId, userRole);
+    const token = generateToken(userId, userRole, tenantId);
 
     res.status(201).json({
       success: true,
       message: 'Registration successful!',
       token,
-      user: { id: userId, name, email: email.toLowerCase(), role: userRole, phone }
+      user: { id: userId, name, email: email.toLowerCase(), role: userRole, phone, tenantId }
     });
   } catch (error) {
     next(error);
@@ -140,7 +143,12 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 
-    const token = generateToken(user.id, user.role);
+    // Tenant isolation: login sirf apne tenant ke users ke liye
+    if (req.tenant && user.tenant_id && user.tenant_id !== req.tenant.id) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    }
+
+    const token = generateToken(user.id, user.role, user.tenant_id);
 
     res.status(200).json({
       success: true,
@@ -151,7 +159,8 @@ const login = async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        phone: user.phone
+        phone: user.phone,
+        tenantId: user.tenant_id
       }
     });
   } catch (error) {

@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const { connectMySQL, initTables } = require('./config/db.mysql');
 const errorHandler = require('./middleware/errorHandler');
 const { generalLimiter } = require('./middleware/rateLimiter');
+const { resolveTenant } = require('./middleware/tenantMiddleware');
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -19,6 +20,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const logisticsRoutes = require('./routes/logisticsRoutes');
+const tenantRoutes = require('./routes/tenantRoutes');
+const superAdminRoutes = require('./routes/superAdminRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -112,6 +115,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', generalLimiter);
 
+// ── Tenant Resolver (Global — runs before all API routes) ────────
+app.use('/api', resolveTenant);
+
 // Mount APIs
 app.use('/api/auth', authRoutes);
 app.use('/api/shipments', shipmentRoutes);
@@ -120,6 +126,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/logistics', logisticsRoutes);
+app.use('/api/tenant', tenantRoutes);
+app.use('/api/superadmin', superAdminRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
