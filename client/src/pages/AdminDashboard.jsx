@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import WmsEnterpriseView from '../components/WmsEnterpriseView';
+
 const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
 
 const AdminDashboard = () => {
@@ -1590,66 +1592,9 @@ const AdminDashboard = () => {
         )}
 
 
-        {/* TAB: WAREHOUSE INVENTORY (MySQL) */}
+        {/* TAB: WAREHOUSE INVENTORY & ENTERPRISE WMS */}
         {activeTab === 'warehouses' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Warehouse Inventory Management</h2>
-                <p className="text-slate-500 text-sm mt-1">Monitor storage capacities, package load, and managers (Stored in MySQL).</p>
-              </div>
-              <button
-                onClick={() => setWarehouseModal(true)}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm"
-              >
-                <PlusCircle size={14} />
-                <span>Register Warehouse</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {warehouses.map(w => {
-                const loadPercent = Math.min(100, Math.round((w.currentLoad / w.capacity) * 100));
-                return (
-                  <div key={w.id} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                        <Warehouse size={20} />
-                      </div>
-                      <button
-                        onClick={() => handleDeleteWarehouse(w.id)}
-                        className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-sm">{w.name}</h3>
-                      <p className="text-slate-400 text-xs mt-0.5">{w.location}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-400">Occupancy Capacity</span>
-                        <span className="text-slate-700">{w.currentLoad} / {w.capacity} kg ({loadPercent}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            loadPercent > 85 ? 'bg-red-500' : loadPercent > 60 ? 'bg-amber-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${loadPercent}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Supervisor Manager:</span>
-                      <span className="font-semibold text-slate-700">{w.managerName}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <WmsEnterpriseView />
         )}
 
         {/* TAB: FLEET & VEHICLES (MySQL) */}

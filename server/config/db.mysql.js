@@ -614,7 +614,12 @@ const initTables = async () => {
       if (err.errno !== 1050) console.error('❌ Failed to create returns table:', err.message);
     }
 
-    console.log('🐬 MySQL: All tables checked/created successfully.');
+    console.log('🐬 MySQL: All core tables checked/created successfully.');
+
+    // ── WMS Module Tables ────────────────────────────────────
+    const { initWMSTables } = require('./wms.tables');
+    await initWMSTables(connection);
+
     connection.release();
   } catch (error) {
     console.error(`❌ Error initializing MySQL tables: ${error.message}`);

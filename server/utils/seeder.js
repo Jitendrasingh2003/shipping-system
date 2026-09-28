@@ -327,6 +327,97 @@ const runDatabaseSeeder = async () => {
       }
     }
 
+    // ── 9. Seed Enterprise WMS / ERP Modules ─────────────────
+    const [[{ count: suppCount }]] = await pool.query('SELECT COUNT(*) AS count FROM vendors');
+    if (suppCount === 0) {
+      console.log('🌱 Seeding demo Enterprise WMS Suppliers, Purchase Orders, Items, & Picklists...');
+      
+      // Suppliers (vendors)
+      const suppliers = [
+        { name: 'Apex Electronics Pvt Ltd', company: 'Apex Electronics', email: 'sales@apexelectronics.com', phone: '9810011223', address: 'Plot 45, Phase-2, Okhla, New Delhi' },
+        { name: 'Titan Freight & Logistics Gear', company: 'Titan Freight', email: 'orders@titanlogistics.com', phone: '9820033445', address: 'GIDC Industrial Estate, Vadodara, Gujarat' },
+        { name: 'Global Polymer & Packaging', company: 'Global Polymer', email: 'info@globalpolymer.in', phone: '9830055667', address: 'MIDC Bhosari, Pune, Maharashtra' }
+      ];
+      
+      const suppIds = [];
+      for (const s of suppliers) {
+        const sId = uuidv4();
+        suppIds.push(sId);
+        await pool.query(
+          `INSERT INTO vendors (id, tenant_id, name, company, email, phone, address)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [sId, 'default-tenant', s.name, s.company, s.email, s.phone, s.address]
+        );
+      }
+
+      // Items (products)
+      const items = [
+        { sku: 'SKU-ELEC-001', name: 'Smart IoT Tracking Sensor Tag v3', desc: 'BLE & GPS tracking beacon with temperature sensor', unit: 'pcs', cost: 1250.00, price: 2100.00, minStock: 50, reorderQty: 200 },
+        { sku: 'SKU-PKG-002', name: 'Heavy Duty Corrugated Box (Double Wall)', desc: '500x400x300mm eco cardboard box', unit: 'pack', cost: 85.00, price: 160.00, minStock: 200, reorderQty: 500 },
+        { sku: 'SKU-EQUIP-003', name: 'Barcode Handheld Scanner Terminal', desc: 'Android 11 Rugged Industrial Terminal', unit: 'pcs', cost: 14500.00, price: 22000.00, minStock: 10, reorderQty: 25 },
+        { sku: 'SKU-PALLET-004', name: 'Heavy Duty Wooden Cargo Pallet', desc: 'Euro Standard 1200x800mm heat treated pallet', unit: 'pcs', cost: 650.00, price: 1100.00, minStock: 100, reorderQty: 300 }
+      ];
+
+      const itemIds = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const itId = uuidv4();
+        itemIds.push(itId);
+        await pool.query(
+          `INSERT INTO products (id, tenant_id, sku, name, description, unit_of_measure, cost_price, selling_price, min_stock, reorder_point)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [itId, 'default-tenant', it.sku, it.name, it.desc, it.unit, it.cost, it.price, it.minStock, it.reorderQty]
+        );
+      }
+
+      // Warehouse Inventory Batch stock
+      const [[wh]] = await pool.query('SELECT id FROM warehouses LIMIT 1');
+      if (wh) {
+        for (let i = 0; i < itemIds.length; i++) {
+          await pool.query(
+            `INSERT INTO inventory (id, tenant_id, warehouse_id, product_id, batch_number, quantity, reserved_qty, expiry_date, cost_price)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              uuidv4(), 'default-tenant', wh.id, itemIds[i],
+              `BATCH-2026-0${i + 1}`, 150 + i * 50, 20 + i * 5, '2027-12-31', items[i].cost
+            ]
+          );
+        }
+      }
+
+      // Purchase Order
+      const poId = uuidv4();
+      await pool.query(
+        `INSERT INTO purchase_orders (id, tenant_id, po_number, vendor_id, warehouse_id, status, total_amount, expected_date, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [poId, 'default-tenant', 'PO-00001', suppIds[0], wh ? wh.id : null, 'confirmed', 250000.00, '2026-10-15', 'Urgent sensor restock for express hub', 'system-seeder']
+      );
+
+      await pool.query(
+        `INSERT INTO purchase_order_items (id, po_id, product_id, tenant_id, quantity, received_qty, unit_price, total)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [uuidv4(), poId, itemIds[0], 'default-tenant', 200, 0, 1250.00, 250000.00]
+      );
+
+      // Pick List
+      const pickId = uuidv4();
+      await pool.query(
+        `INSERT INTO pick_lists (id, tenant_id, pick_number, warehouse_id, priority, status, assigned_to_name, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [pickId, 'default-tenant', 'PICK-00001', wh ? wh.id : null, 'urgent', 'in_progress', 'Staff 1', 'Priority outbound scan for express shipment', 'system-seeder']
+      );
+
+      // Get first bin_id if exists
+      const [[bin]] = await pool.query('SELECT id FROM bin_locations LIMIT 1');
+      if (bin) {
+        await pool.query(
+          `INSERT INTO pick_list_items (id, pick_list_id, product_id, tenant_id, bin_id, quantity, picked_qty, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [uuidv4(), pickId, itemIds[0], 'default-tenant', bin.id, 10, 5, 'pending']
+        );
+      }
+    }
+
     console.log('✅ MySQL seeding complete! All demo data loaded successfully.');
   } catch (err) {
     console.error('❌ Seeder error:', err.message);

@@ -22,6 +22,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const logisticsRoutes = require('./routes/logisticsRoutes');
 const tenantRoutes = require('./routes/tenantRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
+const wmsRoutes = require('./routes/wmsRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -128,6 +129,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/wms', wmsRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
